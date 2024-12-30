@@ -118,6 +118,10 @@ socket.on('playSong', (song) => {
     playSong(song);
 });
 
+socket.on('playSong', (song) => {
+    playSong(song);
+});
+
 // Helper Functions
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(screen => {

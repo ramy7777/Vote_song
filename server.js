@@ -9,15 +9,9 @@ app.use(express.static('public'));
 // Store songs and votes
 let songs = [
     { id: 1, name: "Nancy Ajram - Aah W Noss", votes: 0, file: "Nancy Ajram  Aah W Noss.mp3" },
-    { id: 2, name: "Amr Diab - Tamally Maak", votes: 0, file: "Amr Diab - Tamally Maak.mp3" },
-    { id: 3, name: "Elissa - Aa Bali Habibi", votes: 0, file: "Elissa - Aa Bali Habibi.mp3" },
-    { id: 4, name: "Fadel Shaker - Rooh", votes: 0, file: "Fadel Shaker - Rooh.mp3" },
-    { id: 5, name: "Fairuz - Habaytak Bisayf", votes: 0, file: "Fairuz - Habaytak Bisayf.mp3" },
-    { id: 6, name: "George Wassouf - Salaf w Dein", votes: 0, file: "George Wassouf - Salaf w Dein.mp3" },
-    { id: 7, name: "Kadim Al Sahir - Zidini Ishqan", votes: 0, file: "Kadim Al Sahir - Zidini Ishqan.mp3" },
-    { id: 8, name: "Majida El Roumi - Kalimat", votes: 0, file: "Majida El Roumi - Kalimat.mp3" },
-    { id: 9, name: "Melhem Zein - Git'ala", votes: 0, file: "Melhem Zein - Git'ala.mp3" },
-    { id: 10, name: "Wael Kfoury - Omry Killo", votes: 0, file: "Wael Kfoury - Omry Killo.mp3" }
+    { id: 2, name: "Amr Diab - Tamally Maak", votes: 0, file: "y2mate.com - Tamally Maak  AmrDiab   Official Music Video  تملى معاك  عمرو دياب.mp3" },
+    { id: 3, name: "Mish Masmou7", votes: 0, file: "08. Mish Masmou7.mp3" },
+    { id: 4, name: "Jaye 3a Bali", votes: 0, file: "34Jaye 3a Bali.mp3" }
 ];
 
 let gameState = {
