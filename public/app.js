@@ -260,13 +260,18 @@ function playSong(song) {
     });
 
     if (isHost) {
+        // Enable controls for host
+        domElements.audioPlayer.controls = true;
+        
         // Add event listeners for host controls
         domElements.audioPlayer.addEventListener('play', () => {
+            console.log('Host: Play');
             socket.emit('hostControl', 'play');
             socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
 
         domElements.audioPlayer.addEventListener('pause', () => {
+            console.log('Host: Pause');
             socket.emit('hostControl', 'pause');
             socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
@@ -282,14 +287,14 @@ function playSong(song) {
         });
 
         domElements.audioPlayer.addEventListener('ended', () => {
-            console.log('Song ended naturally');
+            console.log('Host: Song ended naturally');
             socket.emit('hostControl', 'ended');
         });
 
         // Add stop button handler
         if (domElements.stopButton) {
             domElements.stopButton.addEventListener('click', () => {
-                console.log('Stop button clicked');
+                console.log('Host: Stop button clicked');
                 socket.emit('hostControl', 'stop');
                 domElements.audioPlayer.pause();
                 domElements.audioPlayer.currentTime = 0;
@@ -306,13 +311,48 @@ function playSong(song) {
             });
         }
     } else {
-        // For non-host clients
+        // For non-host clients, disable controls
+        domElements.audioPlayer.controls = false;
         domElements.audioPlayer.load();
         if (domElements.stopButton) {
             domElements.stopButton.classList.add('hidden');
         }
     }
 }
+
+// Add host control handlers for non-host clients
+socket.on('hostControl', (action) => {
+    if (!isHost && domElements.audioPlayer) {
+        console.log('Client: Received host control:', action);
+        if (action === 'play') {
+            const playPromise = domElements.audioPlayer.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.log('Client: Playback failed:', error);
+                });
+            }
+        } else if (action === 'pause') {
+            domElements.audioPlayer.pause();
+        } else if (action === 'stop' || action === 'ended') {
+            domElements.audioPlayer.pause();
+            domElements.audioPlayer.currentTime = 0;
+        }
+    }
+});
+
+// Add sync time handler
+socket.on('syncTime', (time) => {
+    if (!isHost && domElements.audioPlayer) {
+        const currentTime = domElements.audioPlayer.currentTime;
+        const diff = Math.abs(currentTime - time);
+        
+        // Only sync if difference is more than 0.5 seconds
+        if (diff > 0.5) {
+            console.log('Client: Syncing time:', time);
+            domElements.audioPlayer.currentTime = time;
+        }
+    }
+});
 
 // Initialize when the page loads
 window.addEventListener('load', () => {
