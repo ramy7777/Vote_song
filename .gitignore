@@ -1,3 +1,4 @@
 node_modules/
 .env
-public/songs/*.mp3
+public/*.zip
+*.zip

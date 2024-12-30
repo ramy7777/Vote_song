@@ -5,16 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Vote Song</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="snowfall.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="soundManager.js"></script>
+    <script src="snowfall.js"></script>
+    <script src="app.js" defer></script>
 </head>
 <body>
+    <!-- Login Screen -->
     <div id="join-screen" class="screen">
-        <h1>Vote Song</h1>
-        <div class="join-container">
-            <input type="text" id="username" placeholder="Enter your name">
-            <button id="join-btn">Join</button>
+        <div class="login-container glass-effect">
+            <h1>Vote Song</h1>
+            <input type="text" id="username" placeholder="Enter your name" maxlength="20">
+            <button id="join-btn" class="glow-button">Join</button>
         </div>
     </div>
 
+    <!-- Waiting Screen -->
     <div id="waiting-screen" class="screen hidden">
         <h2>Waiting Room</h2>
         <div class="participants">
@@ -27,42 +34,41 @@
         </div>
     </div>
 
+    <!-- Voting Screen -->
     <div id="voting-screen" class="screen hidden">
-        <div class="header">
-            <h2>Vote for the Next Song</h2>
-            <div class="participants">
-                <span id="voting-participant-count">0</span> participants
+        <div class="voting-container glass-effect">
+            <div class="header">
+                <h2>Vote for the Next Song</h2>
+                <div class="participants">
+                    <span id="voting-participant-count">0</span> participants
+                </div>
             </div>
+            <div id="songs-container" class="songs-grid"></div>
         </div>
-
-        <div id="songs-container" class="songs-grid"></div>
-    </div>
-
-    <!-- Fixed bottom playback bar -->
-    <div id="current-song" class="playback-bar hidden">
-        <div class="playback-container">
-            <div class="song-info">
-                <span class="now-playing">Now Playing:</span>
-                <span id="current-song-name"></span>
-            </div>
-            <div class="audio-controls">
-                <audio id="audio-player" controls></audio>
-                <div class="control-buttons">
-                    <button id="stop-button" class="control-btn hidden">
-                        <span class="btn-icon">⏹</span>
-                        <span class="btn-text">Stop</span>
-                    </button>
-                    <button id="mute-btn" class="control-btn mute-button">
-                        <span class="unmuted btn-icon">🔊</span>
-                        <span class="muted btn-icon hidden">🔇</span>
-                    </button>
+        
+        <!-- Current Song Display -->
+        <div id="current-song" class="playback-bar hidden">
+            <div class="playback-container glass-effect">
+                <div class="song-info">
+                    <span class="now-playing">Now Playing:</span>
+                    <span id="current-song-name"></span>
+                </div>
+                <div class="audio-controls">
+                    <audio id="audio-player" controls></audio>
+                    <div class="control-buttons">
+                        <button id="stop-button" class="control-btn hidden">
+                            <span class="btn-icon">⏹</span>
+                            <span class="btn-text">Stop</span>
+                        </button>
+                        <button id="mute-btn" class="control-btn mute-button">
+                            <span class="unmuted btn-icon">🔊</span>
+                            <span class="muted btn-icon hidden">🔇</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="soundManager.js"></script>
-    <script src="app.js"></script>
 </body>
 </html>
