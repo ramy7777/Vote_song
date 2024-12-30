@@ -140,16 +140,14 @@ io.on('connection', (socket) => {
     });
 
     // Handle host control events
-    socket.on('hostControl', (action) => {
-        if (socket.id === gameState.host) {
-            console.log('Host control:', action);
-            // Broadcast the control action to all other clients
-            socket.broadcast.emit('hostControl', action);
-            
-            // If song is stopped or ended, start new voting round
-            if (action === 'stop' || action === 'ended') {
-                console.log('Song ended or stopped by host, starting new voting round');
-                startNewVotingRound();
+    socket.on('hostControl', (data) => {
+        if (isHost(socket.id)) {
+            if (typeof data === 'string') {
+                // Handle legacy string messages
+                io.emit('hostControl', { action: data });
+            } else {
+                // Handle new format with timestamp
+                io.emit('hostControl', data);
             }
         }
     });
@@ -237,6 +235,10 @@ io.on('connection', (socket) => {
         }
     });
 });
+
+function isHost(socketId) {
+    return socketId === gameState.host;
+}
 
 function startNewVotingRound() {
     console.log('Starting new voting round');

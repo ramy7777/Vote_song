@@ -259,6 +259,9 @@ function playSong(song) {
     
     domElements.audioPlayer.addEventListener('canplay', () => {
         console.log('Audio ready to play');
+        if (isHost) {
+            socket.emit('hostControl', 'ready');
+        }
     });
 
     if (isHost) {
@@ -268,13 +271,14 @@ function playSong(song) {
         // Add event listeners for host controls
         domElements.audioPlayer.addEventListener('play', () => {
             console.log('Host: Play');
-            socket.emit('hostControl', 'play');
+            const startTime = Date.now();
+            socket.emit('hostControl', { action: 'play', timestamp: startTime });
             socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
 
         domElements.audioPlayer.addEventListener('pause', () => {
             console.log('Host: Pause');
-            socket.emit('hostControl', 'pause');
+            socket.emit('hostControl', { action: 'pause' });
             socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
 
@@ -290,14 +294,14 @@ function playSong(song) {
 
         domElements.audioPlayer.addEventListener('ended', () => {
             console.log('Host: Song ended naturally');
-            socket.emit('hostControl', 'ended');
+            socket.emit('hostControl', { action: 'ended' });
         });
 
         // Add stop button handler
         if (domElements.stopButton) {
             domElements.stopButton.addEventListener('click', () => {
                 console.log('Host: Stop button clicked');
-                socket.emit('hostControl', 'stop');
+                socket.emit('hostControl', { action: 'stop' });
                 domElements.audioPlayer.pause();
                 domElements.audioPlayer.currentTime = 0;
             });
@@ -306,12 +310,6 @@ function playSong(song) {
 
         // Load and play
         domElements.audioPlayer.load();
-        const playPromise = domElements.audioPlayer.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.log('Playback failed:', error);
-            });
-        }
     } else {
         // For non-host clients, disable controls
         domElements.audioPlayer.controls = false;
@@ -323,34 +321,54 @@ function playSong(song) {
 }
 
 // Add host control handlers for non-host clients
-socket.on('hostControl', (action) => {
+socket.on('hostControl', (data) => {
     if (!isHost && domElements.audioPlayer) {
-        console.log('Client: Received host control:', action);
-        if (action === 'play') {
-            const playPromise = domElements.audioPlayer.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.log('Client: Playback failed:', error);
-                });
-            }
-        } else if (action === 'pause') {
+        console.log('Client: Received host control:', data);
+        
+        if (data.action === 'play') {
+            const currentTime = Date.now();
+            const latency = currentTime - data.timestamp;
+            console.log('Client: Latency:', latency, 'ms');
+
+            // Schedule the playback to account for network latency
+            setTimeout(() => {
+                const playPromise = domElements.audioPlayer.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log('Client: Playback failed:', error);
+                    });
+                }
+            }, Math.max(0, 100 - latency)); // Ensure minimum 100ms delay for synchronization
+        } else if (data.action === 'pause') {
             domElements.audioPlayer.pause();
-        } else if (action === 'stop' || action === 'ended') {
+        } else if (data.action === 'stop' || data.action === 'ended') {
             domElements.audioPlayer.pause();
             domElements.audioPlayer.currentTime = 0;
         }
     }
 });
 
-// Add sync time handler
+// Add sync time handler with improved accuracy
 socket.on('syncTime', (time) => {
     if (!isHost && domElements.audioPlayer) {
         const currentTime = domElements.audioPlayer.currentTime;
         const diff = Math.abs(currentTime - time);
         
-        // Only sync if difference is more than 0.5 seconds
-        if (diff > 0.5) {
-            console.log('Client: Syncing time:', time);
+        // Only sync if difference is more than 0.3 seconds
+        if (diff > 0.3) {
+            console.log('Client: Syncing time:', time, 'Difference:', diff);
+            // Use playbackRate to smoothly catch up or slow down
+            if (currentTime < time) {
+                domElements.audioPlayer.playbackRate = 1.05; // Speed up slightly
+                setTimeout(() => {
+                    domElements.audioPlayer.playbackRate = 1.0;
+                }, 1000);
+            } else {
+                domElements.audioPlayer.playbackRate = 0.95; // Slow down slightly
+                setTimeout(() => {
+                    domElements.audioPlayer.playbackRate = 1.0;
+                }, 1000);
+            }
             domElements.audioPlayer.currentTime = time;
         }
     }
