@@ -15,12 +15,17 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 // Serve static files from public directory
 app.use(express.static('public'));
 
-// Store songs and votes
-let songs = [
-    { id: 1, name: "Nancy Ajram - Aah W Noss", votes: 0, file: "Nancy Ajram  Aah W Noss.mp3" },
-    { id: 2, name: "Amr Diab - Tamally Maak", votes: 0, file: "y2mate.com - Tamally Maak  AmrDiab   Official Music Video  تملى معاك  عمرو دياب.mp3" },
-    { id: 3, name: "Mish Masmou7", votes: 0, file: "08. Mish Masmou7.mp3" },
-    { id: 4, name: "Jaye 3a Bali", votes: 0, file: "34Jaye 3a Bali.mp3" }
+// Initialize songs array with the songs from the directory
+const songs = [
+    { id: 1, name: 'Mish Masmou7', file: '08. Mish Masmou7.mp3', votes: 0 },
+    { id: 2, name: 'Jaye 3a Bali', file: '34Jaye 3a Bali.mp3', votes: 0 },
+    { id: 3, name: 'Aah W Noss - Nancy Ajram', file: 'Nancy Ajram  Aah W Noss.mp3', votes: 0 },
+    { id: 4, name: 'Flowers - Miley Cyrus', file: '[YT2mp3.info] - Miley Cyrus - Flowers (Official Video) (320kbps).mp3', votes: 0 },
+    { id: 5, name: 'Bad Liar - Imagine Dragons', file: 'y2mate.com - Imagine Dragons  Bad Liar.mp3', votes: 0 },
+    { id: 6, name: 'Believer - Imagine Dragons', file: 'y2mate.com - Imagine Dragons  Believer.mp3', votes: 0 },
+    { id: 7, name: 'Thunder - Imagine Dragons', file: 'y2mate.com - Imagine Dragons  Thunder.mp3', votes: 0 },
+    { id: 8, name: 'Whatever It Takes - Imagine Dragons', file: 'y2mate.com - Imagine Dragons  Whatever It Takes.mp3', votes: 0 },
+    { id: 9, name: 'Tamally Maak - Amr Diab', file: 'y2mate.com - Tamally Maak  AmrDiab   Official Music Video  تملى معاك  عمرو دياب.mp3', votes: 0 }
 ];
 
 // Initial game state
