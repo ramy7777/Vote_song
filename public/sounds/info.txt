@@ -1,0 +1,5 @@
+Sound Effects for Vote Song Application:
+
+1. background.mp3 - Background music that plays during voting
+2. vote.mp3 - Sound effect that plays when someone votes
+3. Songs for voting are stored in the root directory for easy access

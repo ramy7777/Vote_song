@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vote Song</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="join-screen" class="screen">
+        <h1>Vote Song</h1>
+        <div class="join-container">
+            <input type="text" id="username" placeholder="Enter your name">
+            <button id="join-btn">Join</button>
+        </div>
+    </div>
+
+    <div id="voting-screen" class="screen hidden">
+        <div class="header">
+            <h2>Vote for Your Favorite Song</h2>
+            <div class="participants">
+                <span id="participant-count">0</span> participants
+            </div>
+        </div>
+
+        <div id="songs-container"></div>
+
+        <button id="mute-btn" class="mute-button">
+            <span class="unmuted">🔊</span>
+            <span class="muted hidden">🔇</span>
+        </button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="soundManager.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

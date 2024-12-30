@@ -1,0 +1,146 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    color: white;
+    min-height: 100vh;
+}
+
+.screen {
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.hidden {
+    display: none !important;
+}
+
+h1 {
+    text-align: center;
+    margin: 40px 0;
+    font-size: 2.5em;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.join-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+input[type="text"] {
+    padding: 12px 20px;
+    font-size: 1.1em;
+    border: none;
+    border-radius: 25px;
+    width: 100%;
+    max-width: 300px;
+    outline: none;
+}
+
+button {
+    padding: 12px 30px;
+    font-size: 1.1em;
+    border: none;
+    border-radius: 25px;
+    background: #4CAF50;
+    color: white;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #45a049;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.participants {
+    font-size: 1.1em;
+}
+
+#songs-container {
+    display: grid;
+    gap: 20px;
+}
+
+.song-card {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.3s;
+}
+
+.song-card:hover {
+    transform: translateY(-2px);
+}
+
+.song-info {
+    flex-grow: 1;
+}
+
+.song-name {
+    font-size: 1.2em;
+    margin-bottom: 5px;
+}
+
+.vote-count {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+.vote-button {
+    background: #2196F3;
+    margin-left: 20px;
+}
+
+.vote-button:hover {
+    background: #1976D2;
+}
+
+.mute-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 600px) {
+    .header {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
+
+    .song-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 15px;
+    }
+
+    .vote-button {
+        margin-left: 0;
+    }
+}
