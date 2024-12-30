@@ -26,10 +26,10 @@ body {
 
 /* Glass Effect */
 .glass-effect {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(45, 8, 8, 0.95);
     backdrop-filter: blur(10px);
     border-radius: 15px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(220, 20, 20, 0.3);
     box-shadow: 0 8px 32px 0 rgba(220, 20, 20, 0.37);
 }
 
@@ -40,6 +40,7 @@ body {
     width: 90%;
     max-width: 400px;
     border: 2px solid rgba(220, 20, 20, 0.3);
+    background: rgba(45, 8, 8, 0.95);
 }
 
 .login-container h1 {
@@ -101,6 +102,7 @@ input[type="text"]:focus {
     padding: 20px;
     margin-bottom: 80px;
     border: 2px solid rgba(220, 20, 20, 0.3);
+    background: rgba(45, 8, 8, 0.95);
 }
 
 .header {
@@ -118,29 +120,30 @@ input[type="text"]:focus {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 20px;
     padding: 20px;
+    background: transparent;
 }
 
 .song-card {
-    background: rgba(45, 8, 8, 0.7);
+    background: rgba(45, 8, 8, 0.95);
     padding: 20px;
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.3s ease;
     border: 1px solid rgba(220, 20, 20, 0.5);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    backdrop-filter: none;
 }
 
-.song-card:hover {
-    transform: translateY(-5px);
-    background: rgba(196, 30, 58, 0.3);
-    box-shadow: 0 5px 15px rgba(220, 20, 20, 0.4);
+.song-card.voted {
+    background: rgba(90, 16, 16, 0.95);
+    box-shadow: 0 5px 15px rgba(220, 20, 20, 0.6);
     border-color: #ffd700;
 }
 
 .song-card.disabled {
     opacity: 0.7;
     cursor: not-allowed;
-    background: rgba(45, 8, 8, 0.5);
+    background: rgba(30, 5, 5, 0.95);
 }
 
 .song-name {
@@ -166,7 +169,7 @@ input[type="text"]:focus {
     padding: 20px;
     text-align: center;
     border: 2px solid rgba(220, 20, 20, 0.3);
-    background: rgba(45, 8, 8, 0.85);
+    background: rgba(45, 8, 8, 0.95);
 }
 
 .current-song-container h3 {
@@ -252,11 +255,12 @@ button:disabled:hover {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 1rem;
     margin: 2rem 0;
+    background: transparent;
 }
 
 .song-card {
-    background: #f8f9fa;
-    border: 2px solid #e9ecef;
+    background: rgba(45, 8, 8, 0.95);
+    border: 2px solid rgba(220, 20, 20, 0.3);
     border-radius: 8px;
     padding: 1rem;
     cursor: pointer;
@@ -307,6 +311,7 @@ button:disabled:hover {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    background: transparent;
 }
 
 .song-info {

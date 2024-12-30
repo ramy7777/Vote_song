@@ -228,7 +228,7 @@ function updateSongsDisplay(songs) {
     domElements.songsContainer.innerHTML = '';
     songs.forEach(song => {
         const songCard = document.createElement('div');
-        songCard.className = 'song-card' + (hasVoted ? ' disabled' : '');
+        songCard.className = 'song-card' + (hasVoted ? ' disabled' : '') + (song.votes > 0 ? ' voted' : '');
         
         const nameDiv = document.createElement('div');
         nameDiv.className = 'song-name';
@@ -242,7 +242,10 @@ function updateSongsDisplay(songs) {
         songCard.appendChild(votesDiv);
         
         if (!hasVoted) {
-            songCard.addEventListener('click', () => voteSong(song.id));
+            songCard.addEventListener('click', () => {
+                voteSong(song.id);
+                songCard.classList.add('voted');
+            });
         }
         
         domElements.songsContainer.appendChild(songCard);
