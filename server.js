@@ -2,6 +2,15 @@ const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
+const path = require('path');
+const compression = require('compression');
+
+// Enable gzip compression
+app.use(compression());
+
+// Environment variables
+const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Serve static files from public directory
 app.use(express.static('public'));
@@ -259,7 +268,7 @@ function endVotingRound() {
     io.emit('playSong', winnerSong);
 }
 
-const PORT = process.env.PORT || 3000;
+// Start server
 http.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running in ${NODE_ENV} mode on port ${PORT}`);
 });
