@@ -137,10 +137,35 @@ socket.on('playSong', (song) => {
     playSong(song);
 });
 
-socket.on('syncTime', (currentTime) => {
+socket.on('syncTime', (time) => {
     if (!isHost && domElements.audioPlayer) {
-        // Add a small buffer to account for network delay
-        domElements.audioPlayer.currentTime = currentTime + 0.5;
+        const currentTime = domElements.audioPlayer.currentTime;
+        const diff = Math.abs(currentTime - time);
+        
+        // Only sync if difference is more than 0.5 seconds
+        if (diff > 0.5) {
+            console.log('Syncing time:', time);
+            domElements.audioPlayer.currentTime = time;
+        }
+    }
+});
+
+socket.on('hostControl', (action) => {
+    if (!isHost && domElements.audioPlayer) {
+        console.log('Received host control:', action);
+        if (action === 'play') {
+            const playPromise = domElements.audioPlayer.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.log('Playback failed:', error);
+                });
+            }
+        } else if (action === 'pause') {
+            domElements.audioPlayer.pause();
+        } else if (action === 'stop') {
+            domElements.audioPlayer.pause();
+            domElements.audioPlayer.currentTime = 0;
+        }
     }
 });
 
@@ -216,33 +241,65 @@ function playSong(song) {
     
     domElements.currentSongDiv.classList.remove('hidden');
     domElements.currentSongName.textContent = song.name;
+    
+    // Create a new audio context if it doesn't exist
+    if (!window.audioContext) {
+        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    // Set the source
     domElements.audioPlayer.src = `/songs/${song.file}`;
+    
+    // Add event listeners for buffering
+    domElements.audioPlayer.addEventListener('waiting', () => {
+        console.log('Audio buffering...');
+    });
+    
+    domElements.audioPlayer.addEventListener('canplay', () => {
+        console.log('Audio ready to play');
+    });
 
     if (isHost) {
         // Add event listeners for host controls
         domElements.audioPlayer.addEventListener('play', () => {
             socket.emit('hostControl', 'play');
+            socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
 
         domElements.audioPlayer.addEventListener('pause', () => {
             socket.emit('hostControl', 'pause');
+            socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
 
+        // Throttle timeupdate events to reduce server load
+        let lastUpdate = 0;
         domElements.audioPlayer.addEventListener('timeupdate', () => {
-            socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
+            const now = Date.now();
+            if (now - lastUpdate > 1000) { // Send update every second
+                socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
+                lastUpdate = now;
+            }
         });
 
         domElements.audioPlayer.addEventListener('ended', () => {
             socket.emit('hostControl', 'stop');
         });
 
-        domElements.audioPlayer.play();
+        // Load and play
+        domElements.audioPlayer.load();
+        const playPromise = domElements.audioPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.log('Playback failed:', error);
+            });
+        }
+
         if (domElements.stopButton) {
             domElements.stopButton.classList.remove('hidden');
         }
     } else {
-        // Non-host clients should wait for host control
-        domElements.audioPlayer.controls = false;
+        // For non-host clients
+        domElements.audioPlayer.load();
         if (domElements.stopButton) {
             domElements.stopButton.classList.add('hidden');
         }

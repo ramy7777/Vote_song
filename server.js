@@ -139,41 +139,39 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Handle vote
-    socket.on('vote', (songId) => {
-        if (gameState.isVoting && !votes.has(socket.id)) {
-            votes.set(socket.id, songId);
-            const song = songs.find(s => s.id === songId);
-            if (song) {
-                song.votes++;
-                io.emit('updateVotes', songs);
-                
-                // Check if everyone has voted
-                if (votes.size === participants.size) {
-                    endVotingRound();
-                }
-            }
-        }
-    });
-
-    // Handle host song control
+    // Handle host control events
     socket.on('hostControl', (action) => {
         if (socket.id === gameState.host) {
+            console.log('Host control:', action);
             // Broadcast the control action to all other clients
-            socket.broadcast.emit('songControl', action);
-            
-            // If the song is stopped (either by ending or stop button), start new voting round
-            if (action === 'stop') {
-                startNewVotingRound();
-            }
+            socket.broadcast.emit('hostControl', action);
         }
     });
 
-    // Handle host time update
-    socket.on('timeUpdate', (currentTime) => {
+    // Handle time updates from host
+    socket.on('timeUpdate', (time) => {
         if (socket.id === gameState.host) {
             // Broadcast the current time to all other clients
-            socket.broadcast.emit('syncTime', currentTime);
+            socket.broadcast.emit('syncTime', time);
+        }
+    });
+
+    // Handle voting
+    socket.on('vote', (songId) => {
+        if (!gameState.isVoting || votes.has(socket.id)) return;
+        
+        const song = songs.find(s => s.id === songId);
+        if (song) {
+            votes.set(socket.id, songId);
+            song.votes++;
+            
+            // Broadcast updated songs to all clients
+            io.emit('updateVotes', songs);
+            
+            // If everyone has voted, end the round
+            if (votes.size === participants.size) {
+                endVotingRound();
+            }
         }
     });
 
