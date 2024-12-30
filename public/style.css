@@ -652,3 +652,71 @@ html {
 #stop-button.hidden {
     display: none;
 }
+
+/* iOS Safari Specific Styles */
+@supports (-webkit-touch-callout: none) {
+    body {
+        /* Prevent overscroll bounce and enable momentum scrolling */
+        -webkit-overflow-scrolling: touch;
+        /* Prevent text size adjustment */
+        -webkit-text-size-adjust: none;
+        /* Account for the notch */
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    /* Fix audio player appearance on iOS */
+    audio {
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    /* Fix button tap highlight */
+    button, 
+    .song-card,
+    .glow-button {
+        -webkit-tap-highlight-color: transparent;
+        cursor: pointer;
+    }
+
+    /* Fix glass effect for iOS */
+    .glass-effect {
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    /* Fix input zoom on iOS */
+    input[type="text"] {
+        font-size: 16px; /* Prevents zoom on focus */
+    }
+}
+
+.play-interaction-button {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 15px 30px;
+    background: rgba(255, 215, 0, 0.9);
+    color: #2d0808;
+    border: none;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.play-interaction-button:hover {
+    background: rgba(255, 215, 0, 1);
+    transform: translateX(-50%) scale(1.05);
+}
+
+/* iOS specific button styles */
+@supports (-webkit-touch-callout: none) {
+    .play-interaction-button {
+        /* Ensure button is above the notch area */
+        bottom: max(20px, env(safe-area-inset-bottom));
+        -webkit-tap-highlight-color: transparent;
+    }
+}

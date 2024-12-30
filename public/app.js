@@ -4,6 +4,22 @@ let domElements = {};
 let username;
 let isHost = false;
 let hasVoted = false;
+let audioContextInitialized = false;
+let pendingPlay = false;
+
+// Initialize audio context on first user interaction
+function initAudioContext() {
+    if (!audioContextInitialized && window.audioContext) {
+        window.audioContext.resume().then(() => {
+            console.log('AudioContext initialized');
+            audioContextInitialized = true;
+            if (pendingPlay && domElements.audioPlayer) {
+                domElements.audioPlayer.play().catch(console.error);
+                pendingPlay = false;
+            }
+        });
+    }
+}
 
 // Initialize DOM Elements
 function initializeDOMElements() {
@@ -25,6 +41,10 @@ function initializeDOMElements() {
         waitingMessage: document.getElementById('waiting-message'),
         stopButton: document.getElementById('stop-button')
     };
+
+    // Add audio context initialization on user interaction
+    document.body.addEventListener('touchstart', initAudioContext, { once: true });
+    document.body.addEventListener('click', initAudioContext, { once: true });
 
     // Event Listeners
     domElements.joinButton.addEventListener('click', () => {
@@ -286,6 +306,22 @@ function playSong(song) {
         }
     });
 
+    domElements.audioPlayer.addEventListener('play', () => {
+        // Ensure audio context is running
+        if (window.audioContext && window.audioContext.state === 'suspended') {
+            window.audioContext.resume();
+        }
+    });
+
+    // Add error handling
+    domElements.audioPlayer.addEventListener('error', (e) => {
+        console.error('Audio playback error:', e);
+        if (e.target.error) {
+            console.error('Error code:', e.target.error.code);
+            console.error('Error message:', e.target.error.message);
+        }
+    });
+
     if (isHost) {
         // Enable controls for host
         domElements.audioPlayer.controls = true;
@@ -333,7 +369,7 @@ function playSong(song) {
         // Load and play
         domElements.audioPlayer.load();
     } else {
-        // For non-host clients, disable controls
+        // For non-host clients
         domElements.audioPlayer.controls = false;
         domElements.audioPlayer.load();
         if (domElements.stopButton) {
@@ -348,53 +384,49 @@ socket.on('hostControl', (data) => {
         console.log('Client: Received host control:', data);
         
         if (data.action === 'play') {
-            const currentTime = Date.now();
-            const latency = currentTime - data.timestamp;
-            console.log('Client: Latency:', latency, 'ms');
-
-            // Schedule the playback to account for network latency
-            setTimeout(() => {
-                const playPromise = domElements.audioPlayer.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        console.log('Client: Playback failed:', error);
-                    });
-                }
-            }, Math.max(0, 100 - latency)); // Ensure minimum 100ms delay for synchronization
+            if (!audioContextInitialized) {
+                pendingPlay = true;
+                showPlayButton();
+                return;
+            }
+            
+            const playPromise = domElements.audioPlayer.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.error('Playback failed:', error);
+                    if (error.name === 'NotAllowedError') {
+                        showPlayButton();
+                    }
+                });
+            }
         } else if (data.action === 'pause') {
             domElements.audioPlayer.pause();
-        } else if (data.action === 'stop' || data.action === 'ended') {
+        } else if (data.action === 'stop') {
             domElements.audioPlayer.pause();
             domElements.audioPlayer.currentTime = 0;
+            domElements.currentSongDiv.classList.add('hidden');
         }
     }
 });
 
-// Add sync time handler with improved accuracy
-socket.on('syncTime', (time) => {
-    if (!isHost && domElements.audioPlayer) {
-        const currentTime = domElements.audioPlayer.currentTime;
-        const diff = Math.abs(currentTime - time);
-        
-        // Only sync if difference is more than 0.3 seconds
-        if (diff > 0.3) {
-            console.log('Client: Syncing time:', time, 'Difference:', diff);
-            // Use playbackRate to smoothly catch up or slow down
-            if (currentTime < time) {
-                domElements.audioPlayer.playbackRate = 1.05; // Speed up slightly
-                setTimeout(() => {
-                    domElements.audioPlayer.playbackRate = 1.0;
-                }, 1000);
-            } else {
-                domElements.audioPlayer.playbackRate = 0.95; // Slow down slightly
-                setTimeout(() => {
-                    domElements.audioPlayer.playbackRate = 1.0;
-                }, 1000);
-            }
-            domElements.audioPlayer.currentTime = time;
-        }
+// Function to show a play button when needed
+function showPlayButton() {
+    // Remove any existing play buttons
+    const existingButton = document.querySelector('.play-interaction-button');
+    if (existingButton) {
+        existingButton.remove();
     }
-});
+
+    const playButton = document.createElement('button');
+    playButton.textContent = 'Tap to Play';
+    playButton.className = 'play-interaction-button';
+    playButton.onclick = () => {
+        initAudioContext();
+        domElements.audioPlayer.play().catch(console.error);
+        playButton.remove();
+    };
+    document.body.appendChild(playButton);
+}
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
