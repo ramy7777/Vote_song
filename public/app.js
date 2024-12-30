@@ -47,7 +47,9 @@ function initializeDOMElements() {
         const isMuted = soundManager.toggleMute();
         domElements.mutedIcon.classList.toggle('hidden', !isMuted);
         domElements.unmutedIcon.classList.toggle('hidden', isMuted);
-        domElements.audioPlayer.muted = isMuted;
+        if (domElements.audioPlayer) {
+            domElements.audioPlayer.muted = isMuted;
+        }
     });
 
     if (domElements.stopButton) {
@@ -355,7 +357,7 @@ socket.on('syncTime', (time) => {
 });
 
 // Initialize when the page loads
-window.addEventListener('load', () => {
+document.addEventListener('DOMContentLoaded', () => {
     initializeDOMElements();
     soundManager.preloadAll();
 });

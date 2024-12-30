@@ -1,30 +1,21 @@
 class SoundManager {
     constructor() {
         this.sounds = {
-            vote: new Audio('sounds/vote.mp3'),
-            background: new Audio('sounds/background.mp3')
+            vote: new Audio('sounds/vote.mp3')
         };
-
-        // Configure background music
-        this.sounds.background.loop = true;
-        this.sounds.background.volume = 0.3;
 
         // Configure sound effects
         this.sounds.vote.volume = 0.5;
 
         // Initialize mute state
         this.isMuted = false;
-    }
 
-    playBackground() {
-        if (!this.isMuted) {
-            this.sounds.background.play().catch(e => console.log('Audio play failed:', e));
+        // Load saved mute state from localStorage
+        const savedMuteState = localStorage.getItem('soundMuted');
+        if (savedMuteState !== null) {
+            this.isMuted = savedMuteState === 'true';
+            this.updateMuteState();
         }
-    }
-
-    stopBackground() {
-        this.sounds.background.pause();
-        this.sounds.background.currentTime = 0;
     }
 
     playVote() {
@@ -34,13 +25,16 @@ class SoundManager {
         }
     }
 
+    updateMuteState() {
+        Object.values(this.sounds).forEach(audio => {
+            audio.muted = this.isMuted;
+        });
+        localStorage.setItem('soundMuted', this.isMuted);
+    }
+
     toggleMute() {
         this.isMuted = !this.isMuted;
-        if (this.isMuted) {
-            this.stopBackground();
-        } else {
-            this.playBackground();
-        }
+        this.updateMuteState();
         return this.isMuted;
     }
 
