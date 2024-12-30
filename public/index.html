@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Vote Song</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -36,20 +36,33 @@
         </div>
 
         <div id="songs-container" class="songs-grid"></div>
+    </div>
 
-        <div id="current-song" class="hidden">
-            <h3>Now Playing:</h3>
-            <p id="current-song-name"></p>
-            <audio id="audio-player" controls></audio>
-            <button id="stop-button" class="hidden">Stop Song</button>
-            <button id="mute-btn" class="mute-button">
-                <span class="unmuted">🔊</span>
-                <span class="muted hidden">🔇</span>
-            </button>
+    <!-- Fixed bottom playback bar -->
+    <div id="current-song" class="playback-bar hidden">
+        <div class="playback-container">
+            <div class="song-info">
+                <span class="now-playing">Now Playing:</span>
+                <span id="current-song-name"></span>
+            </div>
+            <div class="audio-controls">
+                <audio id="audio-player" controls></audio>
+                <div class="control-buttons">
+                    <button id="stop-button" class="control-btn hidden">
+                        <span class="btn-icon">⏹</span>
+                        <span class="btn-text">Stop</span>
+                    </button>
+                    <button id="mute-btn" class="control-btn mute-button">
+                        <span class="unmuted btn-icon">🔊</span>
+                        <span class="muted btn-icon hidden">🔇</span>
+                    </button>
+                </div>
+            </div>
         </div>
+    </div>
 
-        <script src="/socket.io/socket.io.js"></script>
-        <script src="soundManager.js"></script>
-        <script src="app.js"></script>
-    </body>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="soundManager.js"></script>
+    <script src="app.js"></script>
+</body>
 </html>
