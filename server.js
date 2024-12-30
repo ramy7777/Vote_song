@@ -145,6 +145,12 @@ io.on('connection', (socket) => {
             console.log('Host control:', action);
             // Broadcast the control action to all other clients
             socket.broadcast.emit('hostControl', action);
+            
+            // If song is stopped or ended, start new voting round
+            if (action === 'stop' || action === 'ended') {
+                console.log('Song ended or stopped by host, starting new voting round');
+                startNewVotingRound();
+            }
         }
     });
 
@@ -238,24 +244,17 @@ function startNewVotingRound() {
     gameState.currentSong = null;
     votes.clear();
     songs.forEach(song => song.votes = 0);
-    console.log('Emitting newVotingRound event');
     io.emit('newVotingRound', songs);
 }
 
 function endVotingRound() {
+    console.log('Ending voting round');
     gameState.isVoting = false;
     const winnerSong = songs.reduce((prev, current) => 
         (prev.votes > current.votes) ? prev : current
     );
     gameState.currentSong = winnerSong;
     io.emit('playSong', winnerSong);
-    
-    // Wait for song duration before starting new round
-    setTimeout(() => {
-        if (participants.size > 0) {
-            startNewVotingRound();
-        }
-    }, 30000); // Assuming 30 seconds per song, adjust as needed
 }
 
 const PORT = process.env.PORT || 3000;

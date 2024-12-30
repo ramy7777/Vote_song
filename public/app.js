@@ -282,8 +282,20 @@ function playSong(song) {
         });
 
         domElements.audioPlayer.addEventListener('ended', () => {
-            socket.emit('hostControl', 'stop');
+            console.log('Song ended naturally');
+            socket.emit('hostControl', 'ended');
         });
+
+        // Add stop button handler
+        if (domElements.stopButton) {
+            domElements.stopButton.addEventListener('click', () => {
+                console.log('Stop button clicked');
+                socket.emit('hostControl', 'stop');
+                domElements.audioPlayer.pause();
+                domElements.audioPlayer.currentTime = 0;
+            });
+            domElements.stopButton.classList.remove('hidden');
+        }
 
         // Load and play
         domElements.audioPlayer.load();
@@ -292,10 +304,6 @@ function playSong(song) {
             playPromise.catch(error => {
                 console.log('Playback failed:', error);
             });
-        }
-
-        if (domElements.stopButton) {
-            domElements.stopButton.classList.remove('hidden');
         }
     } else {
         // For non-host clients
