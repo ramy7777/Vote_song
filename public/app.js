@@ -198,6 +198,12 @@ socket.on('songControl', (action) => {
     }
 });
 
+socket.on('resetVoting', () => {
+    console.log('Resetting voting state');
+    hasVoted = false;
+    updateSongsDisplay(songs);
+});
+
 // Helper Functions
 function showScreen(screenId) {
     console.log('Showing screen:', screenId);

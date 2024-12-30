@@ -269,6 +269,9 @@ function startNewVotingRound() {
         song.votes = 0;
     });
     
+    // Clear the votes map
+    votes.clear();
+    
     // Reset hasVoted for all participants
     for (let [id, participant] of participants) {
         participant.hasVoted = false;
@@ -281,6 +284,9 @@ function startNewVotingRound() {
         songs: songs,
         canStart: gameState.canStart
     });
+    
+    // Explicitly tell clients to reset voting state
+    io.emit('resetVoting');
     
     console.log('New voting round started');
 }
