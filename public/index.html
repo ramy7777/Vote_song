@@ -15,18 +15,33 @@
         </div>
     </div>
 
+    <div id="waiting-screen" class="screen hidden">
+        <h2>Waiting Room</h2>
+        <div class="participants">
+            <p><span id="participant-count">0</span> participants</p>
+            <div id="participant-list"></div>
+        </div>
+        <p id="waiting-message" class="waiting-message">Waiting for more players...</p>
+        <div id="host-controls" class="hidden">
+            <button id="start-game-btn" disabled title="Need between 2 and 30 players to start">Start Game</button>
+        </div>
+    </div>
+
     <div id="voting-screen" class="screen hidden">
         <div class="header">
-            <h2>Vote for Your Favorite Song</h2>
+            <h2>Vote for the Next Song</h2>
             <div class="participants">
-                <span id="participant-count">0</span> participants
+                <span id="voting-participant-count">0</span> participants
             </div>
-            <div id="status-display" class="status"></div>
-            <div id="timer-display" class="timer"></div>
-            <div id="current-song" class="current-song"></div>
         </div>
 
-        <div id="songs-container"></div>
+        <div id="songs-container" class="songs-grid"></div>
+
+        <div id="current-song" class="hidden">
+            <h3>Now Playing:</h3>
+            <p id="current-song-name"></p>
+            <audio id="audio-player" controls></audio>
+        </div>
 
         <button id="mute-btn" class="mute-button">
             <span class="unmuted">🔊</span>
@@ -35,6 +50,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="soundManager.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

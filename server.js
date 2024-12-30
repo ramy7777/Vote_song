@@ -2,54 +2,34 @@ const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
-const path = require('path');
-
-console.log('Starting server...');
-
-// Constants
-const MIN_PLAYERS = 2;
-const MAX_PLAYERS = 30;
-const VOTING_DURATION = 30000; // 30 seconds
 
 // Serve static files from public directory
-const publicPath = path.join(__dirname, 'public');
-console.log('Serving static files from:', publicPath);
-app.use(express.static(publicPath));
-
-// Root route
-app.get('/', (req, res) => {
-    console.log('Received request for root path');
-    const indexPath = path.join(__dirname, 'public', 'index.html');
-    console.log('Sending file:', indexPath);
-    res.sendFile(indexPath);
-});
-
-// Log all requests
-app.use((req, res, next) => {
-    console.log('Request:', req.method, req.url);
-    next();
-});
+app.use(express.static('public'));
 
 // Store songs and votes
 let songs = [
-    { id: 1, name: "Nancy Ajram - Aah W Noss", votes: 0, file: "Nancy Ajram  Aah W Noss.mp3", duration: 203 },
-    { id: 2, name: "Amr Diab - Tamally Maak", votes: 0, file: "Amr Diab - Tamally Maak.mp3", duration: 258 },
-    { id: 3, name: "Elissa - Aa Bali Habibi", votes: 0, file: "Elissa - Aa Bali Habibi.mp3", duration: 267 },
-    { id: 4, name: "Fadel Shaker - Ya Ghayeb", votes: 0, file: "Fadel Shaker - Ya Ghayeb.mp3", duration: 300 },
-    { id: 5, name: "Fairuz - Kifak Inta", votes: 0, file: "Fairuz - Kifak Inta.mp3", duration: 234 },
-    { id: 6, name: "George Wassouf - Kalam El Nas", votes: 0, file: "George Wassouf - Kalam El Nas.mp3", duration: 321 },
-    { id: 7, name: "Kadim Al Sahir - Zidini Ishqan", votes: 0, file: "Kadim Al Sahir - Zidini Ishqan.mp3", duration: 289 },
-    { id: 8, name: "Majida El Roumi - Kalimat", votes: 0, file: "Majida El Roumi - Kalimat.mp3", duration: 276 },
-    { id: 9, name: "Melhem Zein - Git Al Habayib", votes: 0, file: "Melhem Zein - Git Al Habayib.mp3", duration: 245 },
-    { id: 10, name: "Wael Kfoury - Omry Kello", votes: 0, file: "Wael Kfoury - Omry Kello.mp3", duration: 312 }
+    { id: 1, name: "Nancy Ajram - Aah W Noss", votes: 0, file: "Nancy Ajram  Aah W Noss.mp3" },
+    { id: 2, name: "Amr Diab - Tamally Maak", votes: 0, file: "Amr Diab - Tamally Maak.mp3" },
+    { id: 3, name: "Elissa - Aa Bali Habibi", votes: 0, file: "Elissa - Aa Bali Habibi.mp3" },
+    { id: 4, name: "Fadel Shaker - Rooh", votes: 0, file: "Fadel Shaker - Rooh.mp3" },
+    { id: 5, name: "Fairuz - Habaytak Bisayf", votes: 0, file: "Fairuz - Habaytak Bisayf.mp3" },
+    { id: 6, name: "George Wassouf - Salaf w Dein", votes: 0, file: "George Wassouf - Salaf w Dein.mp3" },
+    { id: 7, name: "Kadim Al Sahir - Zidini Ishqan", votes: 0, file: "Kadim Al Sahir - Zidini Ishqan.mp3" },
+    { id: 8, name: "Majida El Roumi - Kalimat", votes: 0, file: "Majida El Roumi - Kalimat.mp3" },
+    { id: 9, name: "Melhem Zein - Git'ala", votes: 0, file: "Melhem Zein - Git'ala.mp3" },
+    { id: 10, name: "Wael Kfoury - Omry Killo", votes: 0, file: "Wael Kfoury - Omry Killo.mp3" }
 ];
 
+let gameState = {
+    isVoting: false,
+    currentSong: null,
+    votingTimeout: null,
+    host: null,
+    canStart: false
+};
+
 let participants = new Map(); // Store connected users
-let isVotingOpen = false;
-let currentlyPlaying = null;
-let votingTimeout = null;
-let gameStarted = false;
-let votedUsers = new Set(); // Track who has voted in current round
+let votes = new Map(); // Store user votes
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -58,53 +38,66 @@ io.on('connection', (socket) => {
     // Handle user joining
     socket.on('joinVoting', (username) => {
         if (username.trim()) {
-            // Check if we're at max capacity
-            if (participants.size >= MAX_PLAYERS) {
-                socket.emit('joinError', 'Room is full (max 30 players)');
+            // Check maximum player limit
+            if (participants.size >= 30) {
+                socket.emit('error', 'Room is full (maximum 30 players)');
                 return;
             }
 
-            participants.set(socket.id, username);
+            const isNewHost = !gameState.host;
+            participants.set(socket.id, { username, isHost: isNewHost });
+            if (isNewHost) {
+                gameState.host = socket.id;
+            }
+
+            // Check if we have enough players to start
+            gameState.canStart = participants.size >= 2 && participants.size <= 30;
+
+            // Emit updated participants and game state to all clients
+            io.emit('updateParticipants', {
+                count: participants.size,
+                participants: Array.from(participants.values()),
+                canStart: gameState.canStart
+            });
+
+            // Send individual host status to the client
+            socket.emit('hostStatus', {
+                isHost: participants.get(socket.id).isHost
+            });
             
             // Send current game state to new participant
             socket.emit('gameState', {
-                isVotingOpen,
-                songs,
-                currentlyPlaying,
-                participantCount: participants.size,
-                minPlayers: MIN_PLAYERS,
-                maxPlayers: MAX_PLAYERS,
-                gameStarted
+                isVoting: gameState.isVoting,
+                currentSong: gameState.currentSong,
+                songs: songs,
+                canStart: gameState.canStart
             });
+        }
+    });
 
-            // Broadcast updated participant count
-            io.emit('updateParticipants', {
-                count: participants.size,
-                participants: Array.from(participants.values())
-            });
-
-            // If we have minimum players and game hasn't started, start it
-            if (participants.size >= MIN_PLAYERS && !gameStarted) {
+    // Handle host starting the game
+    socket.on('startGame', () => {
+        if (socket.id === gameState.host) {
+            if (participants.size >= 2 && participants.size <= 30) {
                 startNewVotingRound();
-                gameStarted = true;
+            } else {
+                socket.emit('error', 'Need between 2 and 30 players to start');
             }
         }
     });
 
     // Handle vote
     socket.on('vote', (songId) => {
-        if (isVotingOpen && !votedUsers.has(socket.id)) {
+        if (gameState.isVoting && !votes.has(socket.id)) {
+            votes.set(socket.id, songId);
             const song = songs.find(s => s.id === songId);
             if (song) {
                 song.votes++;
-                votedUsers.add(socket.id);
                 io.emit('updateVotes', songs);
-
+                
                 // Check if everyone has voted
-                if (votedUsers.size === participants.size) {
-                    // End voting early if everyone has voted
-                    clearTimeout(votingTimeout);
-                    endVotingAndPlaySong();
+                if (votes.size === participants.size) {
+                    endVotingRound();
                 }
             }
         }
@@ -113,71 +106,60 @@ io.on('connection', (socket) => {
     // Handle disconnection
     socket.on('disconnect', () => {
         if (participants.has(socket.id)) {
-            participants.delete(socket.id);
-            votedUsers.delete(socket.id);
-            
-            const participantCount = participants.size;
-            io.emit('updateParticipants', {
-                count: participantCount,
-                participants: Array.from(participants.values())
-            });
-
-            // If we drop below minimum players, pause the game
-            if (participantCount < MIN_PLAYERS && gameStarted) {
-                gameStarted = false;
-                isVotingOpen = false;
-                if (votingTimeout) {
-                    clearTimeout(votingTimeout);
+            // If host disconnects, assign new host
+            if (socket.id === gameState.host) {
+                const remainingParticipants = Array.from(participants.keys());
+                if (remainingParticipants.length > 0) {
+                    gameState.host = remainingParticipants[0];
+                    const newHost = participants.get(gameState.host);
+                    if (newHost) {
+                        newHost.isHost = true;
+                    }
+                } else {
+                    gameState.host = null;
                 }
-                io.emit('gamePaused', 'Waiting for more players to join (minimum 2 players)');
             }
+            
+            participants.delete(socket.id);
+            votes.delete(socket.id);
+            
+            // Check if we have enough players to start
+            gameState.canStart = participants.size >= 2 && participants.size <= 30;
+
+            io.emit('updateParticipants', {
+                count: participants.size,
+                participants: Array.from(participants.values()),
+                canStart: gameState.canStart
+            });
         }
     });
 });
 
 function startNewVotingRound() {
-    // Reset votes
+    gameState.isVoting = true;
+    gameState.currentSong = null;
+    votes.clear();
     songs.forEach(song => song.votes = 0);
-    votedUsers.clear();
-    isVotingOpen = true;
-    currentlyPlaying = null;
-    
-    // Emit voting start
-    io.emit('votingStart', {
-        songs,
-        votingDuration: VOTING_DURATION / 1000
-    });
-    
-    // Set timeout for voting period
-    votingTimeout = setTimeout(() => endVotingAndPlaySong(), VOTING_DURATION);
+    io.emit('newVotingRound', songs);
 }
 
-function endVotingAndPlaySong() {
-    isVotingOpen = false;
-    
-    // Find song with most votes
-    const winningSound = songs.reduce((prev, current) => 
+function endVotingRound() {
+    gameState.isVoting = false;
+    const winnerSong = songs.reduce((prev, current) => 
         (prev.votes > current.votes) ? prev : current
     );
+    gameState.currentSong = winnerSong;
+    io.emit('playSong', winnerSong);
     
-    currentlyPlaying = winningSound;
-    
-    // Emit to all clients to play the winning song
-    io.emit('playSong', winningSound);
-    
-    // Schedule next voting round after song finishes
+    // Wait for song duration before starting new round
     setTimeout(() => {
-        if (participants.size >= MIN_PLAYERS) {
+        if (participants.size > 0) {
             startNewVotingRound();
-        } else {
-            gameStarted = false;
-            io.emit('gamePaused', 'Waiting for more players to join (minimum 2 players)');
         }
-    }, (winningSound.duration * 1000) + 2000); // Add 2 seconds buffer between songs
+    }, 30000); // Assuming 30 seconds per song, adjust as needed
 }
 
-// Start server
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
