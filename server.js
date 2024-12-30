@@ -70,7 +70,7 @@ io.on('connection', (socket) => {
 
             // Only assign as host if there is no current host
             const isNewHost = !gameState.host;
-            const participant = { username, isHost: isNewHost };
+            const participant = { username, isHost: isNewHost, hasVoted: false };
             participants.set(socket.id, participant);
             
             if (isNewHost) {
@@ -151,12 +151,22 @@ io.on('connection', (socket) => {
     // Handle host control events
     socket.on('hostControl', (data) => {
         if (isHost(socket.id)) {
+            console.log('Host control:', data);
+            
             if (typeof data === 'string') {
                 // Handle legacy string messages
                 io.emit('hostControl', { action: data });
+                if (data === 'stop' || data === 'ended') {
+                    console.log('Song ended or stopped by host, starting new voting round');
+                    startNewVotingRound();
+                }
             } else {
                 // Handle new format with timestamp
                 io.emit('hostControl', data);
+                if (data.action === 'stop' || data.action === 'ended') {
+                    console.log('Song ended or stopped by host, starting new voting round');
+                    startNewVotingRound();
+                }
             }
         }
     });
@@ -253,9 +263,26 @@ function startNewVotingRound() {
     console.log('Starting new voting round');
     gameState.isVoting = true;
     gameState.currentSong = null;
-    votes.clear();
-    songs.forEach(song => song.votes = 0);
-    io.emit('newVotingRound', songs);
+    
+    // Reset votes for all songs
+    songs.forEach(song => {
+        song.votes = 0;
+    });
+    
+    // Reset hasVoted for all participants
+    for (let [id, participant] of participants) {
+        participant.hasVoted = false;
+    }
+    
+    // Emit the updated game state to all clients
+    io.emit('gameState', {
+        isVoting: true,
+        currentSong: null,
+        songs: songs,
+        canStart: gameState.canStart
+    });
+    
+    console.log('New voting round started');
 }
 
 function endVotingRound() {

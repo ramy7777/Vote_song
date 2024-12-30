@@ -111,12 +111,25 @@ socket.on('error', (message) => {
 
 socket.on('gameState', (state) => {
     console.log('Received game state:', state);
+    
     if (state.isVoting) {
         showScreen('voting-screen');
-        updateSongsDisplay(state.songs);
-    } else if (state.currentSong) {
-        showScreen('voting-screen');
+        if (state.songs) {
+            hasVoted = false;
+            updateSongsDisplay(state.songs);
+        }
+    }
+    
+    if (state.currentSong) {
         playSong(state.currentSong);
+    } else {
+        if (domElements.currentSongDiv) {
+            domElements.currentSongDiv.classList.add('hidden');
+        }
+        if (domElements.audioPlayer) {
+            domElements.audioPlayer.pause();
+            domElements.audioPlayer.currentTime = 0;
+        }
     }
 });
 
