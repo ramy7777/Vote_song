@@ -82,6 +82,20 @@ function initializeDOMElements() {
             }
         });
     }
+
+    if (domElements.audioPlayer) {
+        domElements.audioPlayer.addEventListener('play', () => {
+            if (isHost) {
+                socket.emit('hostControl', { action: 'play', time: domElements.audioPlayer.currentTime });
+            }
+        });
+
+        domElements.audioPlayer.addEventListener('pause', () => {
+            if (isHost) {
+                socket.emit('hostControl', { action: 'pause', time: domElements.audioPlayer.currentTime });
+            }
+        });
+    }
 }
 
 // Socket Events
@@ -208,32 +222,17 @@ socket.on('hostControl', (data) => {
         console.log('Client: Received host control:', data);
         
         if (data.action === 'play') {
-            if (!audioContextInitialized) {
-                pendingPlay = true;
-                showPlayButton();
-                return;
-            }
-            
-            // Set initial time if provided
-            if (data.currentTime !== undefined) {
-                domElements.audioPlayer.currentTime = data.currentTime;
-            }
-
-            const playPromise = domElements.audioPlayer.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.error('Playback failed:', error);
-                    if (error.name === 'NotAllowedError') {
-                        showPlayButton();
-                    }
-                });
-            }
+            domElements.audioPlayer.currentTime = data.time || 0;
+            domElements.audioPlayer.play().catch(console.error);
         } else if (data.action === 'pause') {
             domElements.audioPlayer.pause();
+            if (data.time) {
+                domElements.audioPlayer.currentTime = data.time;
+            }
         } else if (data.action === 'stop') {
             domElements.audioPlayer.pause();
             domElements.audioPlayer.currentTime = 0;
-            domElements.currentSongDiv.classList.add('hidden');
+            showScreen('voting-screen');
         }
     }
 });
@@ -365,7 +364,7 @@ function playSong(song) {
             console.log('Host: Play');
             socket.emit('hostControl', { 
                 action: 'play',
-                currentTime: domElements.audioPlayer.currentTime
+                time: domElements.audioPlayer.currentTime
             });
             socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
@@ -407,42 +406,6 @@ function playSong(song) {
         }
     }
 }
-
-// Add host control handlers for non-host clients
-socket.on('hostControl', (data) => {
-    if (!isHost && domElements.audioPlayer) {
-        console.log('Client: Received host control:', data);
-        
-        if (data.action === 'play') {
-            if (!audioContextInitialized) {
-                pendingPlay = true;
-                showPlayButton();
-                return;
-            }
-            
-            // Set initial time if provided
-            if (data.currentTime !== undefined) {
-                domElements.audioPlayer.currentTime = data.currentTime;
-            }
-
-            const playPromise = domElements.audioPlayer.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.error('Playback failed:', error);
-                    if (error.name === 'NotAllowedError') {
-                        showPlayButton();
-                    }
-                });
-            }
-        } else if (data.action === 'pause') {
-            domElements.audioPlayer.pause();
-        } else if (data.action === 'stop') {
-            domElements.audioPlayer.pause();
-            domElements.audioPlayer.currentTime = 0;
-            domElements.currentSongDiv.classList.add('hidden');
-        }
-    }
-});
 
 // Function to show a play button when needed
 function showPlayButton() {
