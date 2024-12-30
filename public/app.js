@@ -118,8 +118,21 @@ socket.on('playSong', (song) => {
     playSong(song);
 });
 
-socket.on('playSong', (song) => {
-    playSong(song);
+socket.on('syncTime', (currentTime) => {
+    if (!isHost && domElements.audioPlayer) {
+        // Add a small buffer to account for network delay
+        domElements.audioPlayer.currentTime = currentTime + 0.5;
+    }
+});
+
+socket.on('songControl', (action) => {
+    if (!isHost && domElements.audioPlayer) {
+        if (action === 'play') {
+            domElements.audioPlayer.play();
+        } else if (action === 'pause') {
+            domElements.audioPlayer.pause();
+        }
+    }
 });
 
 // Helper Functions
@@ -171,7 +184,26 @@ function playSong(song) {
     domElements.currentSongDiv.classList.remove('hidden');
     domElements.currentSongName.textContent = song.name;
     domElements.audioPlayer.src = `/songs/${song.file}`;
-    domElements.audioPlayer.play();
+
+    if (isHost) {
+        // Add event listeners for host controls
+        domElements.audioPlayer.addEventListener('play', () => {
+            socket.emit('hostControl', 'play');
+        });
+
+        domElements.audioPlayer.addEventListener('pause', () => {
+            socket.emit('hostControl', 'pause');
+        });
+
+        domElements.audioPlayer.addEventListener('timeupdate', () => {
+            socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
+        });
+
+        domElements.audioPlayer.play();
+    } else {
+        // Non-host clients should wait for host control
+        domElements.audioPlayer.controls = false;
+    }
 }
 
 // Initialize when the page loads

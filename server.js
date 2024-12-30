@@ -97,6 +97,22 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Handle host song control
+    socket.on('hostControl', (action) => {
+        if (socket.id === gameState.host) {
+            // Broadcast the control action to all other clients
+            socket.broadcast.emit('songControl', action);
+        }
+    });
+
+    // Handle host time update
+    socket.on('timeUpdate', (currentTime) => {
+        if (socket.id === gameState.host) {
+            // Broadcast the current time to all other clients
+            socket.broadcast.emit('syncTime', currentTime);
+        }
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
         if (participants.has(socket.id)) {
