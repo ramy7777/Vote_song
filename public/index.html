@@ -41,16 +41,15 @@
             <h3>Now Playing:</h3>
             <p id="current-song-name"></p>
             <audio id="audio-player" controls></audio>
+            <button id="stop-button" class="hidden">Stop Song</button>
+            <button id="mute-btn" class="mute-button">
+                <span class="unmuted">🔊</span>
+                <span class="muted hidden">🔇</span>
+            </button>
         </div>
 
-        <button id="mute-btn" class="mute-button">
-            <span class="unmuted">🔊</span>
-            <span class="muted hidden">🔇</span>
-        </button>
-    </div>
-
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="soundManager.js"></script>
-    <script src="app.js"></script>
-</body>
+        <script src="/socket.io/socket.io.js"></script>
+        <script src="soundManager.js"></script>
+        <script src="app.js"></script>
+    </body>
 </html>

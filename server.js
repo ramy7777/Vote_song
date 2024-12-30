@@ -14,7 +14,8 @@ let songs = [
     { id: 4, name: "Jaye 3a Bali", votes: 0, file: "34Jaye 3a Bali.mp3" }
 ];
 
-let gameState = {
+// Initial game state
+const initialGameState = {
     isVoting: false,
     currentSong: null,
     votingTimeout: null,
@@ -22,15 +23,35 @@ let gameState = {
     canStart: false
 };
 
+let gameState = { ...initialGameState };
 let participants = new Map(); // Store connected users
 let votes = new Map(); // Store user votes
 
+function resetGameState() {
+    // Reset songs votes
+    songs.forEach(song => song.votes = 0);
+    
+    // Reset game state but keep the host
+    const currentHost = gameState.host;
+    gameState = { ...initialGameState };
+    gameState.host = currentHost;
+    
+    // Clear votes
+    votes.clear();
+    
+    // Clear any existing timeouts
+    if (gameState.votingTimeout) {
+        clearTimeout(gameState.votingTimeout);
+    }
+}
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-    console.log('User connected');
+    console.log('User connected:', socket.id);
 
     // Handle user joining
     socket.on('joinVoting', (username) => {
+        console.log('User joining:', username, 'Socket ID:', socket.id);
         if (username.trim()) {
             // Check maximum player limit
             if (participants.size >= 30) {
@@ -38,14 +59,27 @@ io.on('connection', (socket) => {
                 return;
             }
 
+            // Only assign as host if there is no current host
             const isNewHost = !gameState.host;
-            participants.set(socket.id, { username, isHost: isNewHost });
+            const participant = { username, isHost: isNewHost };
+            participants.set(socket.id, participant);
+            
             if (isNewHost) {
+                console.log('Assigning new host:', socket.id);
                 gameState.host = socket.id;
+                // If this is a new host, reset the game state
+                resetGameState();
             }
 
             // Check if we have enough players to start
             gameState.canStart = participants.size >= 2 && participants.size <= 30;
+            console.log('Game state:', {
+                host: gameState.host,
+                currentPlayer: socket.id,
+                isHost: participant.isHost,
+                canStart: gameState.canStart,
+                participants: participants.size
+            });
 
             // Emit updated participants and game state to all clients
             io.emit('updateParticipants', {
@@ -56,7 +90,7 @@ io.on('connection', (socket) => {
 
             // Send individual host status to the client
             socket.emit('hostStatus', {
-                isHost: participants.get(socket.id).isHost
+                isHost: participant.isHost
             });
             
             // Send current game state to new participant
@@ -71,12 +105,37 @@ io.on('connection', (socket) => {
 
     // Handle host starting the game
     socket.on('startGame', () => {
+        console.log('Start game requested by:', socket.id);
+        console.log('Current host:', gameState.host);
+        console.log('Participants:', participants.size);
+        console.log('Is host check:', socket.id === gameState.host);
+        console.log('Player count check:', participants.size >= 2 && participants.size <= 30);
+        
         if (socket.id === gameState.host) {
             if (participants.size >= 2 && participants.size <= 30) {
+                console.log('Starting new game...');
+                // Reset any existing votes and start new round
+                votes.clear();
+                songs.forEach(song => song.votes = 0);
+                gameState.isVoting = true;
+                gameState.currentSong = null;
+                
+                // Emit game state update before starting new round
+                io.emit('gameState', {
+                    isVoting: true,
+                    currentSong: null,
+                    songs: songs,
+                    canStart: gameState.canStart
+                });
+                
                 startNewVotingRound();
             } else {
+                console.log('Not enough players or too many players');
                 socket.emit('error', 'Need between 2 and 30 players to start');
             }
+        } else {
+            console.log('Non-host tried to start game');
+            socket.emit('error', 'Only the host can start the game');
         }
     });
 
@@ -102,6 +161,11 @@ io.on('connection', (socket) => {
         if (socket.id === gameState.host) {
             // Broadcast the control action to all other clients
             socket.broadcast.emit('songControl', action);
+            
+            // If the song is stopped (either by ending or stop button), start new voting round
+            if (action === 'stop') {
+                startNewVotingRound();
+            }
         }
     });
 
@@ -115,41 +179,68 @@ io.on('connection', (socket) => {
 
     // Handle disconnection
     socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
         if (participants.has(socket.id)) {
-            // If host disconnects, assign new host
-            if (socket.id === gameState.host) {
-                const remainingParticipants = Array.from(participants.keys());
-                if (remainingParticipants.length > 0) {
-                    gameState.host = remainingParticipants[0];
-                    const newHost = participants.get(gameState.host);
-                    if (newHost) {
-                        newHost.isHost = true;
-                    }
+            const wasHost = socket.id === gameState.host;
+            const participant = participants.get(socket.id);
+            participants.delete(socket.id);
+
+            console.log('Disconnect state:', {
+                wasHost,
+                remainingParticipants: participants.size,
+                currentHost: gameState.host
+            });
+
+            if (wasHost) {
+                // If host disconnects, assign new host if there are remaining participants
+                if (participants.size > 0) {
+                    const newHostId = participants.keys().next().value;
+                    const newHostParticipant = participants.get(newHostId);
+                    newHostParticipant.isHost = true;
+                    gameState.host = newHostId;
+                    
+                    console.log('New host assigned:', newHostId);
+                    
+                    // Notify new host
+                    io.to(newHostId).emit('hostStatus', { isHost: true });
                 } else {
+                    // No participants left, reset game state
                     gameState.host = null;
+                    resetGameState();
                 }
             }
-            
-            participants.delete(socket.id);
-            votes.delete(socket.id);
-            
-            // Check if we have enough players to start
+
+            // Update can start status
             gameState.canStart = participants.size >= 2 && participants.size <= 30;
 
+            // Notify remaining participants
             io.emit('updateParticipants', {
                 count: participants.size,
                 participants: Array.from(participants.values()),
                 canStart: gameState.canStart
             });
+
+            // Reset game if not enough players
+            if (participants.size < 2) {
+                resetGameState();
+                io.emit('gameState', {
+                    isVoting: false,
+                    currentSong: null,
+                    songs: songs,
+                    canStart: false
+                });
+            }
         }
     });
 });
 
 function startNewVotingRound() {
+    console.log('Starting new voting round');
     gameState.isVoting = true;
     gameState.currentSong = null;
     votes.clear();
     songs.forEach(song => song.votes = 0);
+    console.log('Emitting newVotingRound event');
     io.emit('newVotingRound', songs);
 }
 

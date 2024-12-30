@@ -180,6 +180,24 @@ button:disabled:hover {
     animation: pulse 2s infinite;
 }
 
+#stop-button {
+    margin: 10px;
+    padding: 8px 16px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#stop-button:hover {
+    background-color: #c82333;
+}
+
+#stop-button.hidden {
+    display: none;
+}
+
 @keyframes pulse {
     0% {
         transform: scale(1);

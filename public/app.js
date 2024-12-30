@@ -22,7 +22,8 @@ function initializeDOMElements() {
         muteBtn: document.getElementById('mute-btn'),
         mutedIcon: document.querySelector('.muted'),
         unmutedIcon: document.querySelector('.unmuted'),
-        waitingMessage: document.getElementById('waiting-message')
+        waitingMessage: document.getElementById('waiting-message'),
+        stopButton: document.getElementById('stop-button')
     };
 
     // Event Listeners
@@ -35,7 +36,9 @@ function initializeDOMElements() {
     });
 
     domElements.startGameBtn.addEventListener('click', () => {
+        console.log('Start button clicked, isHost:', isHost);
         if (isHost) {
+            console.log('Emitting startGame event');
             socket.emit('startGame');
         }
     });
@@ -46,6 +49,16 @@ function initializeDOMElements() {
         domElements.unmutedIcon.classList.toggle('hidden', isMuted);
         domElements.audioPlayer.muted = isMuted;
     });
+
+    if (domElements.stopButton) {
+        domElements.stopButton.addEventListener('click', () => {
+            if (isHost) {
+                socket.emit('hostControl', 'stop');
+                domElements.audioPlayer.pause();
+                domElements.audioPlayer.currentTime = 0;
+            }
+        });
+    }
 }
 
 // Socket Events
@@ -64,6 +77,7 @@ socket.on('updateParticipants', (data) => {
 
         // Update start button state if host
         if (isHost && domElements.startGameBtn) {
+            console.log('Updating start button state, canStart:', data.canStart);
             domElements.startGameBtn.disabled = !data.canStart;
             domElements.startGameBtn.title = data.canStart ? 
                 'Start the game' : 
@@ -81,6 +95,7 @@ socket.on('updateParticipants', (data) => {
 });
 
 socket.on('hostStatus', (data) => {
+    console.log('Received host status:', data);
     isHost = data.isHost;
     if (domElements.hostControls) {
         domElements.hostControls.classList.toggle('hidden', !isHost);
@@ -88,10 +103,12 @@ socket.on('hostStatus', (data) => {
 });
 
 socket.on('error', (message) => {
+    console.log('Received error:', message);
     alert(message);
 });
 
 socket.on('gameState', (state) => {
+    console.log('Received game state:', state);
     if (state.isVoting) {
         showScreen('voting-screen');
         updateSongsDisplay(state.songs);
@@ -102,16 +119,18 @@ socket.on('gameState', (state) => {
 });
 
 socket.on('newVotingRound', (songs) => {
-    showScreen('voting-screen');
-    domElements.currentSongDiv.classList.add('hidden');
+    console.log('Received newVotingRound event', songs);
     hasVoted = false;
+    // Hide current song if it's showing
+    if (domElements.currentSongDiv) {
+        domElements.currentSongDiv.classList.add('hidden');
+    }
+    showScreen('voting-screen');
     updateSongsDisplay(songs);
-    soundManager.playVote();
 });
 
 socket.on('updateVotes', (songs) => {
     updateSongsDisplay(songs);
-    soundManager.playVote();
 });
 
 socket.on('playSong', (song) => {
@@ -131,20 +150,34 @@ socket.on('songControl', (action) => {
             domElements.audioPlayer.play();
         } else if (action === 'pause') {
             domElements.audioPlayer.pause();
+        } else if (action === 'stop') {
+            domElements.audioPlayer.pause();
+            domElements.audioPlayer.currentTime = 0;
+            domElements.currentSongDiv.classList.add('hidden');
         }
     }
 });
 
 // Helper Functions
 function showScreen(screenId) {
+    console.log('Showing screen:', screenId);
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.add('hidden');
     });
-    document.getElementById(screenId).classList.remove('hidden');
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+        targetScreen.classList.remove('hidden');
+    } else {
+        console.error('Screen not found:', screenId);
+    }
 }
 
 function updateSongsDisplay(songs) {
-    if (!domElements.songsContainer) return;
+    console.log('Updating songs display');
+    if (!domElements.songsContainer) {
+        console.log('No songs container found');
+        return;
+    }
     
     domElements.songsContainer.innerHTML = '';
     songs.forEach(song => {
@@ -199,10 +232,20 @@ function playSong(song) {
             socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
 
+        domElements.audioPlayer.addEventListener('ended', () => {
+            socket.emit('hostControl', 'stop');
+        });
+
         domElements.audioPlayer.play();
+        if (domElements.stopButton) {
+            domElements.stopButton.classList.remove('hidden');
+        }
     } else {
         // Non-host clients should wait for host control
         domElements.audioPlayer.controls = false;
+        if (domElements.stopButton) {
+            domElements.stopButton.classList.add('hidden');
+        }
     }
 }
 
