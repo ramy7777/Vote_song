@@ -2,19 +2,23 @@
     position: fixed;
     width: 10px;
     height: 10px;
-    background: linear-gradient(white, white);
+    background: linear-gradient(white, #ffcccc);
     border-radius: 50%;
-    filter: drop-shadow(0 0 10px white);
+    filter: drop-shadow(0 0 10px #ffcccc);
     pointer-events: none;
 }
 
 @keyframes snowfall {
     0% {
-        transform: translateY(-10vh) translateX(0);
+        transform: translateY(-10vh) translateX(0) rotate(0deg);
         opacity: 1;
     }
+    50% {
+        transform: translateY(50vh) translateX(50px) rotate(180deg);
+        opacity: 0.8;
+    }
     100% {
-        transform: translateY(100vh) translateX(100px);
+        transform: translateY(100vh) translateX(100px) rotate(360deg);
         opacity: 0.3;
     }
 }
