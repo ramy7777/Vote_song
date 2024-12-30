@@ -219,8 +219,11 @@ io.on('connection', (socket) => {
                     startNewVotingRound();
                 }
             } else {
-                // Handle new format with timestamp
-                io.emit('hostControl', data);
+                // Handle new format with timestamp and time
+                io.emit('hostControl', {
+                    ...data,
+                    serverTime: Date.now()
+                });
                 if (data.action === 'stop' || data.action === 'ended') {
                     console.log('Song ended or stopped by host, starting new voting round');
                     startNewVotingRound();

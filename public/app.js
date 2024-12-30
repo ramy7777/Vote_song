@@ -6,6 +6,7 @@ let isHost = false;
 let hasVoted = false;
 let audioContextInitialized = false;
 let pendingPlay = false;
+let serverTimeOffset = 0;
 
 // Initialize audio context on first user interaction
 function initAudioContext() {
@@ -172,34 +173,67 @@ socket.on('playSong', (song) => {
     playSong(song);
 });
 
-socket.on('syncTime', (time) => {
-    if (!isHost && domElements.audioPlayer) {
+socket.on('syncTime', (hostTime) => {
+    if (!isHost && domElements.audioPlayer && !domElements.audioPlayer.paused) {
         const currentTime = domElements.audioPlayer.currentTime;
-        const diff = Math.abs(currentTime - time);
+        const diff = Math.abs(hostTime - currentTime);
         
-        // Only sync if difference is more than 0.5 seconds
-        if (diff > 0.5) {
-            console.log('Syncing time:', time);
-            domElements.audioPlayer.currentTime = time;
+        // Only sync if difference is more than 0.2 seconds
+        if (diff > 0.2) {
+            console.log('Syncing time - Host:', hostTime, 'Client:', currentTime, 'Diff:', diff);
+            
+            // Gradually adjust the playback rate to catch up or slow down
+            if (currentTime < hostTime) {
+                domElements.audioPlayer.playbackRate = 1.05; // Speed up slightly
+                setTimeout(() => {
+                    domElements.audioPlayer.playbackRate = 1.0;
+                }, 1000);
+            } else {
+                domElements.audioPlayer.playbackRate = 0.95; // Slow down slightly
+                setTimeout(() => {
+                    domElements.audioPlayer.playbackRate = 1.0;
+                }, 1000);
+            }
+            
+            // If the difference is too large, sync immediately
+            if (diff > 1) {
+                domElements.audioPlayer.currentTime = hostTime;
+            }
         }
     }
 });
 
-socket.on('hostControl', (action) => {
+socket.on('hostControl', (data) => {
     if (!isHost && domElements.audioPlayer) {
-        console.log('Received host control:', action);
-        if (action === 'play') {
+        console.log('Client: Received host control:', data);
+        
+        if (data.action === 'play') {
+            if (!audioContextInitialized) {
+                pendingPlay = true;
+                showPlayButton();
+                return;
+            }
+            
+            // Set initial time if provided
+            if (data.currentTime !== undefined) {
+                domElements.audioPlayer.currentTime = data.currentTime;
+            }
+
             const playPromise = domElements.audioPlayer.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
-                    console.log('Playback failed:', error);
+                    console.error('Playback failed:', error);
+                    if (error.name === 'NotAllowedError') {
+                        showPlayButton();
+                    }
                 });
             }
-        } else if (action === 'pause') {
+        } else if (data.action === 'pause') {
             domElements.audioPlayer.pause();
-        } else if (action === 'stop') {
+        } else if (data.action === 'stop') {
             domElements.audioPlayer.pause();
             domElements.audioPlayer.currentTime = 0;
+            domElements.currentSongDiv.classList.add('hidden');
         }
     }
 });
@@ -329,18 +363,14 @@ function playSong(song) {
         // Add event listeners for host controls
         domElements.audioPlayer.addEventListener('play', () => {
             console.log('Host: Play');
-            const startTime = Date.now();
-            socket.emit('hostControl', { action: 'play', timestamp: startTime });
+            socket.emit('hostControl', { 
+                action: 'play',
+                currentTime: domElements.audioPlayer.currentTime
+            });
             socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
 
-        domElements.audioPlayer.addEventListener('pause', () => {
-            console.log('Host: Pause');
-            socket.emit('hostControl', { action: 'pause' });
-            socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
-        });
-
-        // Throttle timeupdate events to reduce server load
+        // Add timeupdate event for host
         let lastUpdate = 0;
         domElements.audioPlayer.addEventListener('timeupdate', () => {
             const now = Date.now();
@@ -390,6 +420,11 @@ socket.on('hostControl', (data) => {
                 return;
             }
             
+            // Set initial time if provided
+            if (data.currentTime !== undefined) {
+                domElements.audioPlayer.currentTime = data.currentTime;
+            }
+
             const playPromise = domElements.audioPlayer.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
