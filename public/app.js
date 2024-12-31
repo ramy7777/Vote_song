@@ -28,9 +28,10 @@ function initAudioContext() {
 function initializeDOMElements() {
     domElements = {
         usernameInput: document.getElementById('username'),
-        sessionInput: document.getElementById('session-id'),
+        hostSessionInput: document.getElementById('host-session-id'),
         createSessionBtn: document.getElementById('create-session-btn'),
         joinSessionBtn: document.getElementById('join-session-btn'),
+        sessionInput: document.getElementById('session-id'),
         sessionDisplay: document.getElementById('session-display'),
         songsContainer: document.getElementById('songs-container'),
         participantCount: document.getElementById('participant-count'),
@@ -55,11 +56,13 @@ function initializeDOMElements() {
     // Event Listeners for Session Management
     domElements.createSessionBtn.addEventListener('click', () => {
         const username = domElements.usernameInput.value.trim();
+        const customSessionId = domElements.hostSessionInput.value.trim();
+        
         if (username) {
             socket.emit('joinVoting', { 
                 username, 
                 isHostUser: true,
-                sessionId: null // New session will be created
+                sessionId: customSessionId || null // Use custom ID if provided, otherwise null for auto-generation
             });
             showScreen('waiting-screen');
         }

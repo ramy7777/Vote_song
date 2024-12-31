@@ -84,38 +84,40 @@ let songs = [
 // Sessions management
 const sessions = new Map();
 
-// Create initial session state
-const createSessionState = () => ({
-    isVoting: false,
-    currentSong: null,
-    host: null,
-    canStart: false,
-    lastActivityTime: Date.now(),
-    participants: new Map(),
-    votes: new Map(),
-    songs: songs.map(song => ({ ...song, votes: 0, voters: [] }))
-});
+// Generate a random session ID if none provided
+const generateSessionId = () => Math.random().toString(36).substring(2, 8);
 
-// Get or create session
+// Get or create session with optional custom ID
 const getOrCreateSession = (sessionId) => {
-    if (!sessions.has(sessionId)) {
-        sessions.set(sessionId, createSessionState());
+    // If no sessionId provided, generate one
+    const finalSessionId = sessionId || generateSessionId();
+    
+    // Check if session exists
+    if (!sessions.has(finalSessionId)) {
+        sessions.set(finalSessionId, {
+            id: finalSessionId,
+            host: null,
+            participants: new Map(),
+            songs: songs.map(song => ({ ...song, votes: 0, voters: [] })),
+            isVoting: true,
+            lastActivity: Date.now()
+        });
     }
-    return sessions.get(sessionId);
+    return sessions.get(finalSessionId);
 };
 
 // Update last activity for a session
 const updateLastActivity = (sessionId) => {
     const session = sessions.get(sessionId);
     if (session) {
-        session.lastActivityTime = Date.now();
+        session.lastActivity = Date.now();
     }
 };
 
 // Handle session inactivity
 const handleSessionInactivity = (sessionId) => {
     const session = sessions.get(sessionId);
-    if (session && Date.now() - session.lastActivityTime > 5 * 60 * 1000) {
+    if (session && Date.now() - session.lastActivity > 5 * 60 * 1000) {
         resetSessionState(sessionId);
         io.to(sessionId).emit('sessionReset');
     }
@@ -178,7 +180,25 @@ io.on('connection', (socket) => {
 
     // Handle user joining
     socket.on('joinVoting', ({ username, isHostUser, sessionId }) => {
-        currentSessionId = sessionId || Math.random().toString(36).substring(7);
+        // Validate session ID if provided for joining
+        if (!isHostUser && sessionId && !sessions.has(sessionId)) {
+            socket.emit('error', { message: 'Session not found' });
+            return;
+        }
+        
+        // For hosts, validate custom session ID if provided
+        if (isHostUser && sessionId) {
+            if (sessions.has(sessionId)) {
+                socket.emit('error', { message: 'Session ID already exists' });
+                return;
+            }
+            if (sessionId.length < 1) {
+                socket.emit('error', { message: 'Session ID must be at least 1 character long' });
+                return;
+            }
+        }
+        
+        currentSessionId = sessionId || generateSessionId();
         const session = getOrCreateSession(currentSessionId);
         
         // Join the socket room for this session

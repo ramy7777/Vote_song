@@ -19,13 +19,17 @@
     <div id="join-screen" class="screen">
         <div class="login-container glass-effect">
             <h1>Vote Song</h1>
-            <input type="text" id="username" placeholder="Enter your name" maxlength="20">
-            
-            <div class="session-controls">
-                <button id="create-session-btn" class="glow-button">Create New Session</button>
-                <div class="session-join">
-                    <input type="text" id="session-id" placeholder="Enter Session ID">
-                    <button id="join-session-btn" class="glow-button">Join Session</button>
+            <div class="join-container">
+                <input type="text" id="username" placeholder="Enter your name" required>
+                <div class="session-controls">
+                    <div class="host-controls">
+                        <input type="text" id="host-session-id" placeholder="Enter room ID (optional)" minlength="1">
+                        <button id="create-session-btn" class="glow-button">Create New Session</button>
+                    </div>
+                    <div class="join-controls">
+                        <input type="text" id="session-id" placeholder="Enter Session ID">
+                        <button id="join-session-btn" class="glow-button">Join Session</button>
+                    </div>
                 </div>
             </div>
         </div>
