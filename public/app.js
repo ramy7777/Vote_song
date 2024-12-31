@@ -275,6 +275,21 @@ socket.on('resetVoting', (songs) => {
     updateSongsDisplay(songs);
 });
 
+socket.on('disconnect', (reason) => {
+    console.log('Disconnected from server:', reason);
+    if (reason === 'io server disconnect') {
+        // Server disconnected us, redirect to join screen
+        showScreen('join-screen');
+        hasVoted = false;
+        isHost = false;
+        domElements.currentSongDiv?.classList.add('hidden');
+        if (domElements.audioPlayer) {
+            domElements.audioPlayer.pause();
+            domElements.audioPlayer.currentTime = 0;
+        }
+    }
+});
+
 // Helper Functions
 function showScreen(screenId) {
     console.log('Showing screen:', screenId);

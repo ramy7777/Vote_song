@@ -85,14 +85,41 @@ let songs = [
 const initialGameState = {
     isVoting: false,
     currentSong: null,
-    votingTimeout: null,
     host: null,
-    canStart: false
+    canStart: false,
+    lastActivityTime: Date.now()
 };
 
 let gameState = { ...initialGameState };
 let participants = new Map(); // Store connected users
 let votes = new Map(); // Store user votes
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
+let inactivityTimer;
+
+function updateLastActivity() {
+    gameState.lastActivityTime = Date.now();
+    // Reset the inactivity timer
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+    }
+    inactivityTimer = setTimeout(handleInactivity, INACTIVITY_TIMEOUT);
+}
+
+function handleInactivity() {
+    console.log('Game inactive for 5 minutes, disconnecting all users');
+    // Disconnect all users
+    io.sockets.sockets.forEach(socket => {
+        socket.disconnect(true);
+    });
+    // Reset game state
+    gameState = { ...initialGameState };
+    participants.clear();
+    votes.clear();
+    songs.forEach(song => {
+        song.votes = 0;
+        song.voters = [];
+    });
+}
 
 function resetGameState() {
     // Reset songs votes and voters
@@ -110,34 +137,21 @@ function resetGameState() {
         participant.hasVoted = false;
     }
     
+    // Update activity timestamp
+    updateLastActivity();
+    
     // Notify clients with reset songs
     io.emit('resetVoting', songs);
 }
 
-function startNewVotingRound() {
-    // Reset votes for all songs
-    songs.forEach(song => {
-        song.votes = 0;
-        song.voters = [];
-    });
-    
-    // Reset hasVoted for all participants
-    for (let [id, participant] of participants) {
-        participant.hasVoted = false;
-    }
-    
-    // Explicitly tell clients to reset voting state with songs
-    io.emit('resetVoting', songs);
-    
-    console.log('New voting round started');
-}
-
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    console.log('New connection:', socket.id);
+    updateLastActivity();
 
     // Handle user joining
     socket.on('joinVoting', (username) => {
+        updateLastActivity();
         console.log('User joining:', username, 'Socket ID:', socket.id);
         if (username.trim()) {
             // Check maximum player limit
@@ -192,6 +206,7 @@ io.on('connection', (socket) => {
 
     // Handle host starting the game
     socket.on('startGame', () => {
+        updateLastActivity();
         console.log('Start game requested by:', socket.id);
         console.log('Current host:', gameState.host);
         console.log('Participants:', participants.size);
@@ -229,6 +244,7 @@ io.on('connection', (socket) => {
 
     // Handle host control events
     socket.on('hostControl', (data) => {
+        updateLastActivity();
         if (isHost(socket.id)) {
             console.log('Host control:', data);
             
@@ -263,6 +279,7 @@ io.on('connection', (socket) => {
 
     // Handle voting
     socket.on('vote', (songId) => {
+        updateLastActivity();
         const participant = participants.get(socket.id);
         if (!participant || participant.hasVoted || !gameState.isVoting) return;
 
@@ -284,56 +301,31 @@ io.on('connection', (socket) => {
 
     // Handle disconnection
     socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
-        if (participants.has(socket.id)) {
-            const wasHost = socket.id === gameState.host;
-            const participant = participants.get(socket.id);
+        const participant = participants.get(socket.id);
+        if (participant) {
+            console.log('User disconnected:', participant.username);
             participants.delete(socket.id);
-
-            console.log('Disconnect state:', {
-                wasHost,
-                remainingParticipants: participants.size,
-                currentHost: gameState.host
-            });
-
-            if (wasHost) {
-                // If host disconnects, assign new host if there are remaining participants
-                if (participants.size > 0) {
-                    const newHostId = participants.keys().next().value;
-                    const newHostParticipant = participants.get(newHostId);
-                    newHostParticipant.isHost = true;
-                    gameState.host = newHostId;
-                    
-                    console.log('New host assigned:', newHostId);
-                    
-                    // Notify new host
-                    io.to(newHostId).emit('hostStatus', { isHost: true });
-                } else {
-                    // No participants left, reset game state
-                    gameState.host = null;
-                    resetGameState();
-                }
+            
+            // If it was the host who disconnected
+            if (participant.isHost) {
+                gameState.host = null;
+                gameState.canStart = false;
             }
-
-            // Update can start status
-            gameState.canStart = participants.size >= 2 && participants.size <= 30;
-
-            // Notify remaining participants
+            
+            // Update participant count for remaining users
             io.emit('updateParticipants', {
                 count: participants.size,
                 participants: Array.from(participants.values()),
                 canStart: gameState.canStart
             });
 
-            // Reset game if not enough players
-            if (participants.size < 2) {
-                resetGameState();
-                io.emit('gameState', {
-                    isVoting: false,
-                    currentSong: null,
-                    songs: songs,
-                    canStart: false
-                });
+            // If no participants left, clear the inactivity timer
+            if (participants.size === 0) {
+                if (inactivityTimer) {
+                    clearTimeout(inactivityTimer);
+                }
+                gameState = { ...initialGameState };
+                votes.clear();
             }
         }
     });
