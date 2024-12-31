@@ -142,12 +142,15 @@ const isHost = (socketId, sessionId) => {
 const startNewVotingRound = (sessionId) => {
     const session = sessions.get(sessionId);
     if (session) {
-        session.isVoting = true;
-        session.votes.clear();
+        // Reset all song votes and voters
         session.songs.forEach(song => {
             song.votes = 0;
             song.voters = [];
+            song.voterNames = [];
         });
+        
+        session.isVoting = true;
+        io.to(sessionId).emit('startVoting', session.songs);
         io.to(sessionId).emit('updateVotes', session.songs);
     }
 };
@@ -252,8 +255,22 @@ io.on('connection', (socket) => {
     // Handle host audio control
     socket.on('hostControl', (data) => {
         if (currentSessionId && isHost(socket.id, currentSessionId)) {
+            const session = sessions.get(currentSessionId);
+            
+            // If stop or ended action, start new voting round
+            if (data.action === 'stop' || data.action === 'ended') {
+                startNewVotingRound(currentSessionId);
+            }
+            
             socket.to(currentSessionId).emit('hostControl', data);
             updateLastActivity(currentSessionId);
+        }
+    });
+
+    // Handle song ended
+    socket.on('songEnded', () => {
+        if (currentSessionId && isHost(socket.id, currentSessionId)) {
+            startNewVotingRound(currentSessionId);
         }
     });
 

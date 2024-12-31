@@ -118,6 +118,31 @@ function initializeDOMElements() {
                 socket.emit('hostControl', { action: 'pause', time: domElements.audioPlayer.currentTime });
             }
         });
+
+        // Handle song ended
+        domElements.audioPlayer.addEventListener('ended', () => {
+            if (isHost) {
+                socket.emit('hostControl', { action: 'ended' });
+                socket.emit('songEnded');
+            }
+            hasVoted = false;
+            domElements.currentSongDiv.classList.add('hidden');
+        });
+    }
+
+    // Add stop button handler
+    if (domElements.stopButton) {
+        domElements.stopButton.addEventListener('click', () => {
+            if (isHost) {
+                socket.emit('hostControl', { action: 'stop' });
+                hasVoted = false;
+                if (domElements.audioPlayer) {
+                    domElements.audioPlayer.pause();
+                    domElements.audioPlayer.currentTime = 0;
+                }
+                domElements.currentSongDiv.classList.add('hidden');
+            }
+        });
     }
 }
 
@@ -339,6 +364,19 @@ socket.on('disconnect', (reason) => {
             domElements.audioPlayer.currentTime = 0;
         }
     }
+});
+
+socket.on('startVoting', () => {
+    console.log('New voting round started');
+    hasVoted = false;
+    if (domElements.audioPlayer) {
+        domElements.audioPlayer.pause();
+        domElements.audioPlayer.currentTime = 0;
+    }
+    if (domElements.currentSongDiv) {
+        domElements.currentSongDiv.classList.add('hidden');
+    }
+    updateSongsDisplay(songs);
 });
 
 // Helper Functions
