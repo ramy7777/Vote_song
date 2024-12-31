@@ -417,20 +417,16 @@ function updateSongsDisplay(songs) {
         votesDiv.className = 'vote-count';
         votesDiv.textContent = `${song.votes} vote${song.votes !== 1 ? 's' : ''}`;
 
-        // Add voters list if there are any voters
-        if (song.voters && song.voters.length > 0) {
-            const votersDiv = document.createElement('div');
-            votersDiv.className = 'voters-list';
-            const voterNames = song.voters.map(voterId => {
-                const participant = participants.get(voterId);
-                return participant ? participant.username : 'Unknown';
-            });
-            votersDiv.textContent = `Voted by: ${voterNames.join(', ')}`;
-            songCard.appendChild(votersDiv);
-        }
-        
         songCard.appendChild(nameDiv);
         songCard.appendChild(votesDiv);
+
+        // Add voters list if there are any voters
+        if (song.voterNames && song.voterNames.length > 0) {
+            const votersDiv = document.createElement('div');
+            votersDiv.className = 'voters-list';
+            votersDiv.textContent = `Voted by: ${song.voterNames.join(', ')}`;
+            songCard.appendChild(votersDiv);
+        }
         
         if (!hasVoted) {
             songCard.addEventListener('click', () => {

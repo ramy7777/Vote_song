@@ -150,8 +150,15 @@ const startNewVotingRound = (sessionId) => {
         });
         
         session.isVoting = true;
-        io.to(sessionId).emit('startVoting', session.songs);
-        io.to(sessionId).emit('updateVotes', session.songs);
+        
+        // Create songs array with empty voter information
+        const songsWithVoters = session.songs.map(s => ({
+            ...s,
+            voterNames: []
+        }));
+        
+        io.to(sessionId).emit('startVoting', songsWithVoters);
+        io.to(sessionId).emit('updateVotes', songsWithVoters);
     }
 };
 
@@ -229,11 +236,19 @@ io.on('connection', (socket) => {
                     song.votes++;
                     song.voters.push(socket.id);
                     
+                    // Create a songs array with voter information
+                    const songsWithVoters = session.songs.map(s => ({
+                        ...s,
+                        voterNames: s.voters.map(voterId => {
+                            const voter = session.participants.get(voterId);
+                            return voter ? voter.username : 'Unknown';
+                        })
+                    }));
+                    
                     // Emit updated songs to all participants in the session
-                    io.to(currentSessionId).emit('updateVotes', session.songs);
+                    io.to(currentSessionId).emit('updateVotes', songsWithVoters);
                     
                     // Check if all participants have voted
-                    const totalVotes = session.songs.reduce((sum, s) => sum + s.voters.length, 0);
                     const uniqueVoters = new Set(session.songs.flatMap(s => s.voters)).size;
                     
                     if (uniqueVoters === session.participants.size) {
