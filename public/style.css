@@ -166,6 +166,13 @@ input[type="text"]:focus {
     color: #f0e68c;
 }
 
+.voters-list {
+    font-size: 0.85em;
+    color: #f0e68c;
+    margin-top: 8px;
+    opacity: 0.8;
+}
+
 /* Current Song Display */
 .current-song-container {
     position: fixed;

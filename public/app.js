@@ -287,9 +287,19 @@ function updateSongsDisplay(songs) {
         const votesDiv = document.createElement('div');
         votesDiv.className = 'vote-count';
         votesDiv.textContent = `${song.votes} votes`;
-        
-        songCard.appendChild(nameDiv);
-        songCard.appendChild(votesDiv);
+
+        // Add voters list if there are any voters
+        if (song.voters && song.voters.length > 0) {
+            const votersDiv = document.createElement('div');
+            votersDiv.className = 'voters-list';
+            votersDiv.textContent = `Voted by: ${song.voters.join(', ')}`;
+            songCard.appendChild(nameDiv);
+            songCard.appendChild(votesDiv);
+            songCard.appendChild(votersDiv);
+        } else {
+            songCard.appendChild(nameDiv);
+            songCard.appendChild(votesDiv);
+        }
         
         if (!hasVoted) {
             songCard.addEventListener('click', () => {

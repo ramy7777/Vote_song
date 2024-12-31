@@ -251,6 +251,7 @@ io.on('connection', (socket) => {
         const song = songs.find(s => s.id === songId);
         if (song) {
             song.votes++;
+            song.voters = song.voters || [];
             song.voters.push(participant.username);
             io.emit('updateVotes', songs);
 
