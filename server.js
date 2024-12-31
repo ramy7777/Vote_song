@@ -220,10 +220,29 @@ io.on('connection', (socket) => {
             const session = sessions.get(currentSessionId);
             if (session && session.isVoting) {
                 const song = session.songs.find(s => s.id === songId);
-                if (song && !song.voters.includes(socket.id)) {
+                const participant = session.participants.get(socket.id);
+                
+                if (song && participant && !song.voters.includes(socket.id)) {
                     song.votes++;
                     song.voters.push(socket.id);
+                    
+                    // Emit updated songs to all participants in the session
                     io.to(currentSessionId).emit('updateVotes', session.songs);
+                    
+                    // Check if all participants have voted
+                    const totalVotes = session.songs.reduce((sum, s) => sum + s.voters.length, 0);
+                    const uniqueVoters = new Set(session.songs.flatMap(s => s.voters)).size;
+                    
+                    if (uniqueVoters === session.participants.size) {
+                        // Find the winning song
+                        const winnerSong = session.songs.reduce((prev, current) => 
+                            (prev.votes > current.votes) ? prev : current
+                        );
+                        
+                        // End voting and play the winning song
+                        session.isVoting = false;
+                        io.to(currentSessionId).emit('playSong', winnerSong);
+                    }
                 }
             }
             updateLastActivity(currentSessionId);

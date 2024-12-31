@@ -8,6 +8,7 @@ let audioContextInitialized = false;
 let pendingPlay = false;
 let serverTimeOffset = 0;
 let currentSessionId = null;
+let participants = new Map(); // Add participants tracking
 
 // Initialize audio context on first user interaction
 function initAudioContext() {
@@ -51,20 +52,7 @@ function initializeDOMElements() {
     document.body.addEventListener('touchstart', initAudioContext, { once: true });
     document.body.addEventListener('click', initAudioContext, { once: true });
 
-    // Event Listeners
-    domElements.joinSessionBtn.addEventListener('click', () => {
-        username = domElements.usernameInput.value.trim();
-        const sessionId = domElements.sessionInput.value.trim();
-        if (username && sessionId) {
-            socket.emit('joinVoting', { 
-                username, 
-                isHostUser: false,
-                sessionId
-            });
-            showScreen('waiting-screen');
-        }
-    });
-
+    // Event Listeners for Session Management
     domElements.createSessionBtn.addEventListener('click', () => {
         const username = domElements.usernameInput.value.trim();
         if (username) {
@@ -77,13 +65,27 @@ function initializeDOMElements() {
         }
     });
 
-    domElements.startGameBtn.addEventListener('click', () => {
-        console.log('Start button clicked, isHost:', isHost);
-        if (isHost) {
-            console.log('Emitting startGame event');
-            socket.emit('startGame');
+    domElements.joinSessionBtn.addEventListener('click', () => {
+        const username = domElements.usernameInput.value.trim();
+        const sessionId = domElements.sessionInput.value.trim();
+        if (username && sessionId) {
+            socket.emit('joinVoting', { 
+                username, 
+                isHostUser: false,
+                sessionId
+            });
+            showScreen('waiting-screen');
         }
     });
+
+    // Add start game button listener
+    if (domElements.startGameBtn) {
+        domElements.startGameBtn.addEventListener('click', () => {
+            if (isHost) {
+                socket.emit('startGame');
+            }
+        });
+    }
 
     domElements.muteBtn.addEventListener('click', () => {
         const isMuted = soundManager.toggleMute();
@@ -129,6 +131,11 @@ socket.on('sessionJoined', (data) => {
         domElements.sessionDisplay.textContent = `Session ID: ${currentSessionId}`;
     }
     
+    // Show host controls if host
+    if (domElements.hostControls) {
+        domElements.hostControls.classList.toggle('hidden', !isHost);
+    }
+    
     showScreen('waiting-screen');
 });
 
@@ -136,31 +143,41 @@ socket.on('updateParticipants', (data) => {
     if (domElements.participantCount) {
         domElements.participantCount.textContent = data.participants.length;
         domElements.votingParticipantCount.textContent = data.participants.length;
-        
-        // Update participant list
+    }
+
+    // Update participants map
+    participants.clear();
+    data.participants.forEach(participant => {
+        participants.set(participant.id, participant);
+    });
+
+    // Update participant list
+    if (domElements.participantList) {
         domElements.participantList.innerHTML = '';
         data.participants.forEach(participant => {
             const li = document.createElement('li');
             li.textContent = `${participant.username}${participant.isHost ? ' (Host)' : ''}`;
             domElements.participantList.appendChild(li);
         });
+    }
 
-        // Update start button state if host
-        if (isHost && domElements.startGameBtn) {
-            console.log('Updating start button state, canStart:', data.canStart);
+    // Update host controls and start button
+    if (domElements.hostControls && isHost) {
+        domElements.hostControls.classList.remove('hidden');
+        if (domElements.startGameBtn) {
             domElements.startGameBtn.disabled = !data.canStart;
             domElements.startGameBtn.title = data.canStart ? 
                 'Start the game' : 
                 'Need between 2 and 30 players to start';
         }
+    }
 
-        // Update waiting message
-        if (domElements.waitingMessage) {
-            const neededPlayers = data.participants.length < 2 ? 2 - data.participants.length : 0;
-            domElements.waitingMessage.textContent = neededPlayers > 0 ?
-                `Waiting for ${neededPlayers} more player${neededPlayers > 1 ? 's' : ''}...` :
-                'Waiting for host to start the game...';
-        }
+    // Update waiting message
+    if (domElements.waitingMessage) {
+        const neededPlayers = data.participants.length < 2 ? 2 - data.participants.length : 0;
+        domElements.waitingMessage.textContent = neededPlayers > 0 ?
+            `Waiting for ${neededPlayers} more player${neededPlayers > 1 ? 's' : ''}...` :
+            'Waiting for host to start the game...';
     }
 });
 
@@ -213,6 +230,7 @@ socket.on('newVotingRound', (songs) => {
 });
 
 socket.on('updateVotes', (songs) => {
+    console.log('Received updated votes:', songs);
     updateSongsDisplay(songs);
 });
 
@@ -337,6 +355,13 @@ function showScreen(screenId) {
     }
 }
 
+function voteSong(songId) {
+    if (!hasVoted) {
+        socket.emit('vote', { songId });  
+        hasVoted = true;
+    }
+}
+
 function updateSongsDisplay(songs) {
     if (!domElements.songsContainer || !songs) return;
 
@@ -352,41 +377,31 @@ function updateSongsDisplay(songs) {
         
         const votesDiv = document.createElement('div');
         votesDiv.className = 'vote-count';
-        votesDiv.textContent = `${song.votes} votes`;
+        votesDiv.textContent = `${song.votes} vote${song.votes !== 1 ? 's' : ''}`;
 
         // Add voters list if there are any voters
         if (song.voters && song.voters.length > 0) {
             const votersDiv = document.createElement('div');
             votersDiv.className = 'voters-list';
-            votersDiv.textContent = `Voted by: ${song.voters.join(', ')}`;
-            songCard.appendChild(nameDiv);
-            songCard.appendChild(votesDiv);
+            const voterNames = song.voters.map(voterId => {
+                const participant = participants.get(voterId);
+                return participant ? participant.username : 'Unknown';
+            });
+            votersDiv.textContent = `Voted by: ${voterNames.join(', ')}`;
             songCard.appendChild(votersDiv);
-        } else {
-            songCard.appendChild(nameDiv);
-            songCard.appendChild(votesDiv);
         }
+        
+        songCard.appendChild(nameDiv);
+        songCard.appendChild(votesDiv);
         
         if (!hasVoted) {
             songCard.addEventListener('click', () => {
                 voteSong(song.id);
-                songCard.classList.add('voted');
             });
         }
         
         domElements.songsContainer.appendChild(songCard);
     });
-}
-
-function voteSong(songId) {
-    if (!hasVoted) {
-        socket.emit('vote', songId);
-        hasVoted = true;
-        const songCard = document.querySelector(`.song-card[data-id="${songId}"]`);
-        if (songCard) {
-            songCard.classList.add('voted');
-        }
-    }
 }
 
 function playSong(song) {
