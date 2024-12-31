@@ -46,12 +46,21 @@ function initializeDOMElements() {
         mutedIcon: document.querySelector('.muted'),
         unmutedIcon: document.querySelector('.unmuted'),
         waitingMessage: document.getElementById('waiting-message'),
-        stopButton: document.getElementById('stop-button')
+        stopButton: document.getElementById('stop-button'),
+        quickJoinBtn: document.getElementById('quick-join-btn'),
     };
 
     // Add audio context initialization on user interaction
     document.body.addEventListener('touchstart', initAudioContext, { once: true });
     document.body.addEventListener('click', initAudioContext, { once: true });
+
+    // Quick Join Button
+    domElements.quickJoinBtn.addEventListener('click', () => {
+        const username = domElements.usernameInput.value.trim();
+        if (username) {
+            socket.emit('quickJoin', { username });
+        }
+    });
 
     // Event Listeners for Session Management
     domElements.createSessionBtn.addEventListener('click', () => {
@@ -62,7 +71,7 @@ function initializeDOMElements() {
             socket.emit('joinVoting', { 
                 username, 
                 isHostUser: true,
-                sessionId: customSessionId || null // Use custom ID if provided, otherwise null for auto-generation
+                sessionId: customSessionId || null
             });
             showScreen('waiting-screen');
         }
@@ -154,9 +163,9 @@ socket.on('sessionJoined', (data) => {
     currentSessionId = data.sessionId;
     isHost = data.isHost;
     
-    // Update UI with session information
+    // Update session display
     if (domElements.sessionDisplay) {
-        domElements.sessionDisplay.textContent = `Session ID: ${currentSessionId}`;
+        domElements.sessionDisplay.textContent = `Room ID: ${currentSessionId}`;
     }
     
     // Show host controls if host
@@ -164,6 +173,7 @@ socket.on('sessionJoined', (data) => {
         domElements.hostControls.classList.toggle('hidden', !isHost);
     }
     
+    // Show waiting screen
     showScreen('waiting-screen');
 });
 
@@ -217,9 +227,9 @@ socket.on('hostStatus', (data) => {
     }
 });
 
-socket.on('error', (message) => {
-    console.log('Received error:', message);
-    alert(message);
+socket.on('error', (data) => {
+    console.error('Server error:', data.message);
+    // You could show this error to the user in a more user-friendly way
 });
 
 socket.on('gameState', (state) => {

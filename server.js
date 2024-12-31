@@ -173,10 +173,106 @@ const endVotingRound = (sessionId) => {
     }
 };
 
+let activeQuickSession = null; // Track the active quick session
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log('New connection:', socket.id);
     let currentSessionId = null;
+
+    // Handle quick join
+    socket.on('quickJoin', ({ username }) => {
+        if (activeQuickSession && sessions.has(activeQuickSession)) {
+            // Join existing quick session as player
+            const session = sessions.get(activeQuickSession);
+            currentSessionId = activeQuickSession;
+            
+            // Add as non-host participant
+            session.participants.set(socket.id, {
+                id: socket.id,
+                username,
+                isHost: false
+            });
+            
+            // Join the socket room
+            socket.join(activeQuickSession);
+            
+            // Update session state
+            session.canStart = session.participants.size >= 2;
+            
+            // Send session info to the joining player
+            socket.emit('sessionJoined', {
+                sessionId: activeQuickSession,
+                isHost: false
+            });
+            
+            // Emit updated state to all participants
+            io.to(activeQuickSession).emit('updateParticipants', {
+                participants: Array.from(session.participants.values()),
+                canStart: session.canStart
+            });
+            
+            updateLastActivity(activeQuickSession);
+        } else {
+            // Create new quick session as host
+            const quickSessionId = Math.random().toString(36).substring(2, 5);
+            activeQuickSession = quickSessionId;
+            currentSessionId = quickSessionId;
+            
+            // Create session and set up as host
+            const session = getOrCreateSession(quickSessionId);
+            session.host = socket.id;
+            session.participants.set(socket.id, {
+                id: socket.id,
+                username,
+                isHost: true
+            });
+            
+            // Join the socket room
+            socket.join(quickSessionId);
+            
+            // Send session info to host
+            socket.emit('sessionJoined', {
+                sessionId: quickSessionId,
+                isHost: true
+            });
+            
+            // Update participants list
+            io.to(quickSessionId).emit('updateParticipants', {
+                participants: Array.from(session.participants.values()),
+                canStart: false
+            });
+            
+            updateLastActivity(quickSessionId);
+        }
+    });
+
+    // Handle disconnection
+    socket.on('disconnect', () => {
+        if (currentSessionId) {
+            const session = sessions.get(currentSessionId);
+            if (session) {
+                // Remove from participants
+                session.participants.delete(socket.id);
+                
+                // If this was the host of a quick session, clear it
+                if (session.host === socket.id && currentSessionId === activeQuickSession) {
+                    activeQuickSession = null;
+                }
+                
+                // Update remaining participants
+                io.to(currentSessionId).emit('updateParticipants', {
+                    participants: Array.from(session.participants.values()),
+                    canStart: session.participants.size >= 2
+                });
+                
+                // Clean up empty sessions
+                if (session.participants.size === 0) {
+                    sessions.delete(currentSessionId);
+                }
+            }
+        }
+    });
 
     // Handle user joining
     socket.on('joinVoting', ({ username, isHostUser, sessionId }) => {
@@ -314,37 +410,6 @@ io.on('connection', (socket) => {
         if (currentSessionId && isHost(socket.id, currentSessionId)) {
             socket.to(currentSessionId).emit('syncTime', time);
             updateLastActivity(currentSessionId);
-        }
-    });
-
-    // Handle disconnection
-    socket.on('disconnect', () => {
-        if (currentSessionId) {
-            const session = sessions.get(currentSessionId);
-            if (session) {
-                session.participants.delete(socket.id);
-                
-                // Reassign host if needed
-                if (session.host === socket.id) {
-                    const nextParticipant = Array.from(session.participants.values())[0];
-                    if (nextParticipant) {
-                        session.host = nextParticipant.id;
-                        nextParticipant.isHost = true;
-                        io.to(currentSessionId).emit('hostStatus', { newHost: nextParticipant.id });
-                    }
-                }
-                
-                // Update participants
-                io.to(currentSessionId).emit('updateParticipants', {
-                    participants: Array.from(session.participants.values()),
-                    canStart: session.participants.size >= 2 && session.host !== null
-                });
-                
-                // Clean up empty sessions
-                if (session.participants.size === 0) {
-                    sessions.delete(currentSessionId);
-                }
-            }
         }
     });
 });

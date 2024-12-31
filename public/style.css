@@ -818,3 +818,45 @@ input, textarea {
         -webkit-tap-highlight-color: transparent;
     }
 }
+
+.quick-join {
+    background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
+    font-size: 1.2rem;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: bold;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.quick-join:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+}
+
+.quick-join:active {
+    transform: translateY(0);
+}
+
+.separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 1rem 0;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.separator::before,
+.separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.separator span {
+    margin: 0 1rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
