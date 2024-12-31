@@ -276,49 +276,29 @@ function updateSongsDisplay(songs) {
 
     domElements.songsContainer.innerHTML = '';
     songs.forEach(song => {
-        const songDiv = document.createElement('div');
-        songDiv.className = 'song-item';
+        const songCard = document.createElement('div');
+        songCard.className = 'song-card' + (song.votes > 0 ? ' voted' : '') + (hasVoted ? ' disabled' : '');
+        songCard.setAttribute('data-id', song.id);
         
-        const songInfo = document.createElement('div');
-        songInfo.className = 'song-info';
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'song-name';
+        nameDiv.textContent = song.name;
         
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'song-name';
-        nameSpan.textContent = song.name;
+        const votesDiv = document.createElement('div');
+        votesDiv.className = 'vote-count';
+        votesDiv.textContent = `${song.votes} votes`;
         
-        const votesSpan = document.createElement('span');
-        votesSpan.className = 'vote-count';
-        votesSpan.textContent = `Votes: ${song.votes}`;
+        songCard.appendChild(nameDiv);
+        songCard.appendChild(votesDiv);
         
-        const voteButton = document.createElement('button');
-        voteButton.textContent = 'Vote';
-        voteButton.className = 'vote-button';
-        voteButton.disabled = hasVoted;
-        voteButton.onclick = () => voteSong(song.id);
-        
-        songInfo.appendChild(nameSpan);
-        songInfo.appendChild(votesSpan);
-        songInfo.appendChild(voteButton);
-        songDiv.appendChild(songInfo);
-
-        // Add voters list
-        if (song.voters && song.voters.length > 0) {
-            const votersDiv = document.createElement('div');
-            votersDiv.className = 'voters-list';
-            const votersLabel = document.createElement('span');
-            votersLabel.className = 'voters-label';
-            votersLabel.textContent = 'Voted by: ';
-            votersDiv.appendChild(votersLabel);
-            
-            const votersList = document.createElement('span');
-            votersList.className = 'voters-names';
-            votersList.textContent = song.voters.join(', ');
-            votersDiv.appendChild(votersList);
-            
-            songDiv.appendChild(votersDiv);
+        if (!hasVoted) {
+            songCard.addEventListener('click', () => {
+                voteSong(song.id);
+                songCard.classList.add('voted');
+            });
         }
-
-        domElements.songsContainer.appendChild(songDiv);
+        
+        domElements.songsContainer.appendChild(songCard);
     });
 }
 
@@ -326,7 +306,10 @@ function voteSong(songId) {
     if (!hasVoted) {
         socket.emit('vote', songId);
         hasVoted = true;
-        soundManager.playVote();
+        const songCard = document.querySelector(`.song-card[data-id="${songId}"]`);
+        if (songCard) {
+            songCard.classList.add('voted');
+        }
     }
 }
 

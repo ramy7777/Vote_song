@@ -132,12 +132,20 @@ input[type="text"]:focus {
     border: 1px solid rgba(220, 20, 20, 0.5);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
     backdrop-filter: none;
+    border-left: 4px solid transparent;
 }
 
 .song-card.voted {
     background: rgba(90, 16, 16, 0.95);
     box-shadow: 0 5px 15px rgba(220, 20, 20, 0.6);
-    border-color: #ffd700;
+    border-color: #4CAF50;
+    border-left: 4px solid #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.song-card.voted .vote-count {
+    color: #4CAF50;
+    font-weight: bold;
 }
 
 .song-card.disabled {
