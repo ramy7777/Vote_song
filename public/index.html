@@ -20,6 +20,14 @@
         <div class="login-container glass-effect">
             <h1>Vote Song</h1>
             <input type="text" id="username" placeholder="Enter your name" maxlength="20">
+            
+            <div class="session-controls">
+                <button id="create-session-btn" class="glow-button">Create New Session</button>
+                <div class="session-join">
+                    <input type="text" id="session-id" placeholder="Enter Session ID">
+                    <button id="join-session-btn" class="glow-button">Join Session</button>
+                </div>
+            </div>
             <button id="join-btn" class="glow-button">Join</button>
         </div>
     </div>
@@ -27,6 +35,7 @@
     <!-- Waiting Screen -->
     <div id="waiting-screen" class="screen hidden">
         <h2>Waiting Room</h2>
+        <div id="session-display" class="session-info"></div>
         <div class="participants">
             <p><span id="participant-count">0</span> participants</p>
             <div id="participant-list"></div>

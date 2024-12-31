@@ -81,299 +81,202 @@ let songs = [
     { id: 62, name: 'Thunder (Lyrics) - Imagine Dragons', file: 'yt1s.com - Imagine Dragons  Thunder Lyrics.mp3', votes: 0 }
 ].map(song => ({ ...song, voters: [] }));
 
-// Initial game state
-const initialGameState = {
+// Sessions management
+const sessions = new Map();
+
+// Create initial session state
+const createSessionState = () => ({
     isVoting: false,
     currentSong: null,
     host: null,
     canStart: false,
-    lastActivityTime: Date.now()
+    lastActivityTime: Date.now(),
+    participants: new Map(),
+    votes: new Map(),
+    songs: songs.map(song => ({ ...song, votes: 0, voters: [] }))
+});
+
+// Get or create session
+const getOrCreateSession = (sessionId) => {
+    if (!sessions.has(sessionId)) {
+        sessions.set(sessionId, createSessionState());
+    }
+    return sessions.get(sessionId);
 };
 
-let gameState = { ...initialGameState };
-let participants = new Map(); // Store connected users
-let votes = new Map(); // Store user votes
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
-let inactivityTimer;
-
-function updateLastActivity() {
-    gameState.lastActivityTime = Date.now();
-    // Reset the inactivity timer
-    if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
+// Update last activity for a session
+const updateLastActivity = (sessionId) => {
+    const session = sessions.get(sessionId);
+    if (session) {
+        session.lastActivityTime = Date.now();
     }
-    inactivityTimer = setTimeout(handleInactivity, INACTIVITY_TIMEOUT);
-}
+};
 
-function handleInactivity() {
-    console.log('Game inactive for 5 minutes, disconnecting all users');
-    // Disconnect all users
-    io.sockets.sockets.forEach(socket => {
-        socket.disconnect(true);
-    });
-    // Reset game state
-    gameState = { ...initialGameState };
-    participants.clear();
-    votes.clear();
-    songs.forEach(song => {
-        song.votes = 0;
-        song.voters = [];
-    });
-}
-
-function resetGameState() {
-    // Reset songs votes and voters
-    songs.forEach(song => {
-        song.votes = 0;
-        song.voters = [];
-    });
-    
-    // Reset game state but keep the host
-    const currentHost = gameState.host;
-    gameState = { ...initialGameState, host: currentHost };
-    
-    // Reset hasVoted for all participants
-    for (let [id, participant] of participants) {
-        participant.hasVoted = false;
+// Handle session inactivity
+const handleSessionInactivity = (sessionId) => {
+    const session = sessions.get(sessionId);
+    if (session && Date.now() - session.lastActivityTime > 5 * 60 * 1000) {
+        resetSessionState(sessionId);
+        io.to(sessionId).emit('sessionReset');
     }
-    
-    // Update activity timestamp
-    updateLastActivity();
-    
-    // Notify clients with reset songs
-    io.emit('resetVoting', songs);
-}
+};
+
+// Reset session state
+const resetSessionState = (sessionId) => {
+    const session = sessions.get(sessionId);
+    if (session) {
+        session.isVoting = false;
+        session.currentSong = null;
+        session.votes.clear();
+        session.songs = songs.map(song => ({ ...song, votes: 0, voters: [] }));
+    }
+};
+
+// Check if user is host for a session
+const isHost = (socketId, sessionId) => {
+    const session = sessions.get(sessionId);
+    return session && session.host === socketId;
+};
+
+// Start new voting round for a session
+const startNewVotingRound = (sessionId) => {
+    const session = sessions.get(sessionId);
+    if (session) {
+        session.isVoting = true;
+        session.votes.clear();
+        session.songs.forEach(song => {
+            song.votes = 0;
+            song.voters = [];
+        });
+        io.to(sessionId).emit('updateVotes', session.songs);
+    }
+};
+
+// End voting round for a session
+const endVotingRound = (sessionId) => {
+    const session = sessions.get(sessionId);
+    if (session) {
+        session.isVoting = false;
+        io.to(sessionId).emit('votingEnded');
+    }
+};
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log('New connection:', socket.id);
-    updateLastActivity();
+    let currentSessionId = null;
 
     // Handle user joining
-    socket.on('joinVoting', (username) => {
-        updateLastActivity();
-        console.log('User joining:', username, 'Socket ID:', socket.id);
-        if (username.trim()) {
-            // Check maximum player limit
-            if (participants.size >= 30) {
-                socket.emit('error', 'Room is full (maximum 30 players)');
-                return;
-            }
-
-            // Only assign as host if there is no current host
-            const isNewHost = !gameState.host;
-            const participant = { username, isHost: isNewHost, hasVoted: false };
-            participants.set(socket.id, participant);
-            
-            if (isNewHost) {
-                console.log('Assigning new host:', socket.id);
-                gameState.host = socket.id;
-                // If this is a new host, reset the game state
-                resetGameState();
-            }
-
-            // Check if we have enough players to start
-            gameState.canStart = participants.size >= 2 && participants.size <= 30;
-            console.log('Game state:', {
-                host: gameState.host,
-                currentPlayer: socket.id,
-                isHost: participant.isHost,
-                canStart: gameState.canStart,
-                participants: participants.size
-            });
-
-            // Emit updated participants and game state to all clients
-            io.emit('updateParticipants', {
-                count: participants.size,
-                participants: Array.from(participants.values()),
-                canStart: gameState.canStart
-            });
-
-            // Send individual host status to the client
-            socket.emit('hostStatus', {
-                isHost: participant.isHost
-            });
-            
-            // Send current game state to new participant
-            socket.emit('gameState', {
-                isVoting: gameState.isVoting,
-                currentSong: gameState.currentSong,
-                songs: songs,
-                canStart: gameState.canStart
-            });
-        }
-    });
-
-    // Handle host starting the game
-    socket.on('startGame', () => {
-        updateLastActivity();
-        console.log('Start game requested by:', socket.id);
-        console.log('Current host:', gameState.host);
-        console.log('Participants:', participants.size);
-        console.log('Is host check:', socket.id === gameState.host);
-        console.log('Player count check:', participants.size >= 2 && participants.size <= 30);
+    socket.on('joinVoting', ({ username, isHostUser, sessionId }) => {
+        currentSessionId = sessionId || Math.random().toString(36).substring(7);
+        const session = getOrCreateSession(currentSessionId);
         
-        if (socket.id === gameState.host) {
-            if (participants.size >= 2 && participants.size <= 30) {
-                console.log('Starting new game...');
-                // Reset any existing votes and start new round
-                votes.clear();
-                songs.forEach(song => song.votes = 0);
-                songs.forEach(song => song.voters = []);
-                gameState.isVoting = true;
-                gameState.currentSong = null;
-                
-                // Emit game state update before starting new round
-                io.emit('gameState', {
-                    isVoting: true,
-                    currentSong: null,
-                    songs: songs,
-                    canStart: gameState.canStart
-                });
-                
-                startNewVotingRound();
-            } else {
-                console.log('Not enough players or too many players');
-                socket.emit('error', 'Need between 2 and 30 players to start');
-            }
-        } else {
-            console.log('Non-host tried to start game');
-            socket.emit('error', 'Only the host can start the game');
+        // Join the socket room for this session
+        socket.join(currentSessionId);
+        
+        // Update session state
+        session.participants.set(socket.id, {
+            id: socket.id,
+            username,
+            isHost: isHostUser && !session.host
+        });
+        
+        // Set host if none exists and user requested host
+        if (isHostUser && !session.host) {
+            session.host = socket.id;
         }
+        
+        // Update can start condition
+        session.canStart = session.participants.size >= 2 && session.host !== null;
+        
+        // Emit updated state to all participants in this session
+        io.to(currentSessionId).emit('updateParticipants', {
+            participants: Array.from(session.participants.values()),
+            canStart: session.canStart
+        });
+        
+        // Send session ID back to client
+        socket.emit('sessionJoined', {
+            sessionId: currentSessionId,
+            isHost: session.host === socket.id
+        });
+        
+        updateLastActivity(currentSessionId);
     });
 
-    // Handle host control events
-    socket.on('hostControl', (data) => {
-        updateLastActivity();
-        if (isHost(socket.id)) {
-            console.log('Host control:', data);
-            
-            if (typeof data === 'string') {
-                // Handle legacy string messages
-                io.emit('hostControl', { action: data });
-                if (data === 'stop' || data === 'ended') {
-                    console.log('Song ended or stopped by host, starting new voting round');
-                    startNewVotingRound();
-                }
-            } else {
-                // Handle new format with timestamp and time
-                io.emit('hostControl', {
-                    ...data,
-                    serverTime: Date.now()
-                });
-                if (data.action === 'stop' || data.action === 'ended') {
-                    console.log('Song ended or stopped by host, starting new voting round');
-                    startNewVotingRound();
-                }
-            }
-        }
-    });
-
-    // Handle time updates from host
-    socket.on('timeUpdate', (time) => {
-        if (socket.id === gameState.host) {
-            // Broadcast the current time to all other clients
-            socket.broadcast.emit('syncTime', time);
+    // Handle game start
+    socket.on('startGame', () => {
+        if (currentSessionId && isHost(socket.id, currentSessionId)) {
+            const session = sessions.get(currentSessionId);
+            startNewVotingRound(currentSessionId);
+            io.to(currentSessionId).emit('gameState', { isVoting: true });
+            updateLastActivity(currentSessionId);
         }
     });
 
     // Handle voting
-    socket.on('vote', (songId) => {
-        updateLastActivity();
-        const participant = participants.get(socket.id);
-        if (!participant || participant.hasVoted || !gameState.isVoting) return;
-
-        participant.hasVoted = true;
-        const song = songs.find(s => s.id === songId);
-        if (song) {
-            song.votes++;
-            song.voters = song.voters || [];
-            song.voters.push(participant.username);
-            io.emit('updateVotes', songs);
-
-            // Check if all participants have voted
-            const allVoted = Array.from(participants.values()).every(p => p.hasVoted);
-            if (allVoted) {
-                endVotingRound();
+    socket.on('vote', ({ songId }) => {
+        if (currentSessionId) {
+            const session = sessions.get(currentSessionId);
+            if (session && session.isVoting) {
+                const song = session.songs.find(s => s.id === songId);
+                if (song && !song.voters.includes(socket.id)) {
+                    song.votes++;
+                    song.voters.push(socket.id);
+                    io.to(currentSessionId).emit('updateVotes', session.songs);
+                }
             }
+            updateLastActivity(currentSessionId);
+        }
+    });
+
+    // Handle host audio control
+    socket.on('hostControl', (data) => {
+        if (currentSessionId && isHost(socket.id, currentSessionId)) {
+            socket.to(currentSessionId).emit('hostControl', data);
+            updateLastActivity(currentSessionId);
+        }
+    });
+
+    // Handle time synchronization
+    socket.on('timeUpdate', (time) => {
+        if (currentSessionId && isHost(socket.id, currentSessionId)) {
+            socket.to(currentSessionId).emit('syncTime', time);
+            updateLastActivity(currentSessionId);
         }
     });
 
     // Handle disconnection
     socket.on('disconnect', () => {
-        const participant = participants.get(socket.id);
-        if (participant) {
-            console.log('User disconnected:', participant.username);
-            participants.delete(socket.id);
-            
-            // If it was the host who disconnected
-            if (participant.isHost) {
-                gameState.host = null;
-                gameState.canStart = false;
-            }
-            
-            // Update participant count for remaining users
-            io.emit('updateParticipants', {
-                count: participants.size,
-                participants: Array.from(participants.values()),
-                canStart: gameState.canStart
-            });
-
-            // If no participants left, clear the inactivity timer
-            if (participants.size === 0) {
-                if (inactivityTimer) {
-                    clearTimeout(inactivityTimer);
+        if (currentSessionId) {
+            const session = sessions.get(currentSessionId);
+            if (session) {
+                session.participants.delete(socket.id);
+                
+                // Reassign host if needed
+                if (session.host === socket.id) {
+                    const nextParticipant = Array.from(session.participants.values())[0];
+                    if (nextParticipant) {
+                        session.host = nextParticipant.id;
+                        nextParticipant.isHost = true;
+                        io.to(currentSessionId).emit('hostStatus', { newHost: nextParticipant.id });
+                    }
                 }
-                gameState = { ...initialGameState };
-                votes.clear();
+                
+                // Update participants
+                io.to(currentSessionId).emit('updateParticipants', {
+                    participants: Array.from(session.participants.values()),
+                    canStart: session.participants.size >= 2 && session.host !== null
+                });
+                
+                // Clean up empty sessions
+                if (session.participants.size === 0) {
+                    sessions.delete(currentSessionId);
+                }
             }
         }
     });
 });
-
-function isHost(socketId) {
-    return socketId === gameState.host;
-}
-
-function startNewVotingRound() {
-    console.log('Starting new voting round');
-    gameState.isVoting = true;
-    gameState.currentSong = null;
-    
-    // Reset votes for all songs
-    songs.forEach(song => {
-        song.votes = 0;
-        song.voters = [];
-    });
-    
-    // Reset hasVoted for all participants
-    for (let [id, participant] of participants) {
-        participant.hasVoted = false;
-    }
-    
-    // Emit the updated game state to all clients
-    io.emit('gameState', {
-        isVoting: true,
-        currentSong: null,
-        songs: songs,
-        canStart: gameState.canStart
-    });
-    
-    // Explicitly tell clients to reset voting state with songs
-    io.emit('resetVoting', songs);
-    
-    console.log('New voting round started');
-}
-
-function endVotingRound() {
-    console.log('Ending voting round');
-    gameState.isVoting = false;
-    const winnerSong = songs.reduce((prev, current) => 
-        (prev.votes > current.votes) ? prev : current
-    );
-    gameState.currentSong = winnerSong;
-    io.emit('playSong', winnerSong);
-}
 
 // Start server
 http.listen(PORT, () => {

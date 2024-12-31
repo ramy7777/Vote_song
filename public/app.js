@@ -7,6 +7,7 @@ let hasVoted = false;
 let audioContextInitialized = false;
 let pendingPlay = false;
 let serverTimeOffset = 0;
+let currentSessionId = null;
 
 // Initialize audio context on first user interaction
 function initAudioContext() {
@@ -26,7 +27,10 @@ function initAudioContext() {
 function initializeDOMElements() {
     domElements = {
         usernameInput: document.getElementById('username'),
-        joinButton: document.getElementById('join-btn'),
+        sessionInput: document.getElementById('session-id'),
+        createSessionBtn: document.getElementById('create-session-btn'),
+        joinSessionBtn: document.getElementById('join-session-btn'),
+        sessionDisplay: document.getElementById('session-display'),
         songsContainer: document.getElementById('songs-container'),
         participantCount: document.getElementById('participant-count'),
         votingParticipantCount: document.getElementById('voting-participant-count'),
@@ -48,10 +52,27 @@ function initializeDOMElements() {
     document.body.addEventListener('click', initAudioContext, { once: true });
 
     // Event Listeners
-    domElements.joinButton.addEventListener('click', () => {
+    domElements.joinSessionBtn.addEventListener('click', () => {
         username = domElements.usernameInput.value.trim();
+        const sessionId = domElements.sessionInput.value.trim();
+        if (username && sessionId) {
+            socket.emit('joinVoting', { 
+                username, 
+                isHostUser: false,
+                sessionId
+            });
+            showScreen('waiting-screen');
+        }
+    });
+
+    domElements.createSessionBtn.addEventListener('click', () => {
+        const username = domElements.usernameInput.value.trim();
         if (username) {
-            socket.emit('joinVoting', username);
+            socket.emit('joinVoting', { 
+                username, 
+                isHostUser: true,
+                sessionId: null // New session will be created
+            });
             showScreen('waiting-screen');
         }
     });
@@ -99,17 +120,29 @@ function initializeDOMElements() {
 }
 
 // Socket Events
+socket.on('sessionJoined', (data) => {
+    currentSessionId = data.sessionId;
+    isHost = data.isHost;
+    
+    // Update UI with session information
+    if (domElements.sessionDisplay) {
+        domElements.sessionDisplay.textContent = `Session ID: ${currentSessionId}`;
+    }
+    
+    showScreen('waiting-screen');
+});
+
 socket.on('updateParticipants', (data) => {
     if (domElements.participantCount) {
-        domElements.participantCount.textContent = data.count;
-        domElements.votingParticipantCount.textContent = data.count;
+        domElements.participantCount.textContent = data.participants.length;
+        domElements.votingParticipantCount.textContent = data.participants.length;
         
         // Update participant list
         domElements.participantList.innerHTML = '';
         data.participants.forEach(participant => {
-            const div = document.createElement('div');
-            div.textContent = participant.username + (participant.isHost ? ' (Host)' : '');
-            domElements.participantList.appendChild(div);
+            const li = document.createElement('li');
+            li.textContent = `${participant.username}${participant.isHost ? ' (Host)' : ''}`;
+            domElements.participantList.appendChild(li);
         });
 
         // Update start button state if host
@@ -123,7 +156,7 @@ socket.on('updateParticipants', (data) => {
 
         // Update waiting message
         if (domElements.waitingMessage) {
-            const neededPlayers = data.count < 2 ? 2 - data.count : 0;
+            const neededPlayers = data.participants.length < 2 ? 2 - data.participants.length : 0;
             domElements.waitingMessage.textContent = neededPlayers > 0 ?
                 `Waiting for ${neededPlayers} more player${neededPlayers > 1 ? 's' : ''}...` :
                 'Waiting for host to start the game...';
