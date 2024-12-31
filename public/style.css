@@ -704,30 +704,30 @@ html {
     }
 }
 
+/* Play Interaction Button */
 .play-interaction-button {
     position: fixed;
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
     padding: 15px 30px;
-    background: rgba(255, 215, 0, 0.9);
-    color: #2d0808;
+    background: linear-gradient(45deg, #c41e3a, #ff0033);
+    color: #ffd700;
     border: none;
     border-radius: 25px;
-    font-size: 16px;
-    font-weight: bold;
+    font-size: 18px;
+    cursor: pointer;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     z-index: 1000;
-    cursor: pointer;
     transition: all 0.3s ease;
 }
 
 .play-interaction-button:hover {
-    background: rgba(255, 215, 0, 1);
     transform: translateX(-50%) scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
-/* iOS specific button styles */
+/* iOS-specific adjustments */
 @supports (-webkit-touch-callout: none) {
     .play-interaction-button {
         /* Ensure button is above the notch area */

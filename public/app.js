@@ -222,8 +222,26 @@ socket.on('hostControl', (data) => {
         console.log('Client: Received host control:', data);
         
         if (data.action === 'play') {
-            domElements.audioPlayer.currentTime = data.time || 0;
-            domElements.audioPlayer.play().catch(console.error);
+            if (!audioContextInitialized) {
+                pendingPlay = true;
+                showPlayButton();
+                return;
+            }
+            
+            // Set initial time if provided
+            if (data.time) {
+                domElements.audioPlayer.currentTime = data.time;
+            }
+
+            const playPromise = domElements.audioPlayer.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.error('Playback failed:', error);
+                    if (error.name === 'NotAllowedError') {
+                        showPlayButton();
+                    }
+                });
+            }
         } else if (data.action === 'pause') {
             domElements.audioPlayer.pause();
             if (data.time) {
@@ -425,15 +443,25 @@ function showPlayButton() {
         existingButton.remove();
     }
 
-    const playButton = document.createElement('button');
-    playButton.textContent = 'Tap to Play';
-    playButton.className = 'play-interaction-button';
-    playButton.onclick = () => {
-        initAudioContext();
-        domElements.audioPlayer.play().catch(console.error);
-        playButton.remove();
-    };
-    document.body.appendChild(playButton);
+    const button = document.createElement('button');
+    button.className = 'play-interaction-button';
+    button.textContent = 'Tap to Play';
+    button.addEventListener('click', () => {
+        if (domElements.audioPlayer) {
+            const playPromise = domElements.audioPlayer.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    button.remove();
+                    audioContextInitialized = true;
+                    pendingPlay = false;
+                }).catch(error => {
+                    console.error('Playback still failed:', error);
+                });
+            }
+        }
+    });
+
+    document.body.appendChild(button);
 }
 
 // Initialize when the page loads
