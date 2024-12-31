@@ -16,7 +16,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 app.use(express.static('public'));
 
 // Initialize songs array with the songs from the directory
-const songs = [
+let songs = [
     { id: 1, name: 'All I Want For Christmas Is You - Mariah Carey', file: '(Mariah Carey)-All I Want For Christmas Is You(1) (2).mp3', votes: 0 },
     { id: 2, name: 'Waiyaah', file: '01 - Waiyaah.mp3', votes: 0 },
     { id: 3, name: 'Rajee Yetamar Lebnan', file: '01 Rajee Yetamar Lebnan.mp3', votes: 0 },
@@ -79,7 +79,7 @@ const songs = [
     { id: 60, name: 'Whatever It Takes - Imagine Dragons', file: 'y2mate.com - Imagine Dragons  Whatever It Takes.mp3', votes: 0 },
     { id: 61, name: 'Tamally Maak - Amr Diab', file: 'y2mate.com - Tamally Maak  AmrDiab   Official Music Video  تملى معاك  عمرو دياب.mp3', votes: 0 },
     { id: 62, name: 'Thunder (Lyrics) - Imagine Dragons', file: 'yt1s.com - Imagine Dragons  Thunder Lyrics.mp3', votes: 0 }
-];
+].map(song => ({ ...song, voters: [] }));
 
 // Initial game state
 const initialGameState = {
@@ -97,6 +97,7 @@ let votes = new Map(); // Store user votes
 function resetGameState() {
     // Reset songs votes
     songs.forEach(song => song.votes = 0);
+    songs.forEach(song => song.voters = []);
     
     // Reset game state but keep the host
     const currentHost = gameState.host;
@@ -184,6 +185,7 @@ io.on('connection', (socket) => {
                 // Reset any existing votes and start new round
                 votes.clear();
                 songs.forEach(song => song.votes = 0);
+                songs.forEach(song => song.voters = []);
                 gameState.isVoting = true;
                 gameState.currentSong = null;
                 
@@ -242,18 +244,19 @@ io.on('connection', (socket) => {
 
     // Handle voting
     socket.on('vote', (songId) => {
-        if (!gameState.isVoting || votes.has(socket.id)) return;
-        
+        const participant = participants.get(socket.id);
+        if (!participant || participant.hasVoted || !gameState.isVoting) return;
+
+        participant.hasVoted = true;
         const song = songs.find(s => s.id === songId);
         if (song) {
-            votes.set(socket.id, songId);
             song.votes++;
-            
-            // Broadcast updated songs to all clients
+            song.voters.push(participant.username);
             io.emit('updateVotes', songs);
-            
-            // If everyone has voted, end the round
-            if (votes.size === participants.size) {
+
+            // Check if all participants have voted
+            const allVoted = Array.from(participants.values()).every(p => p.hasVoted);
+            if (allVoted) {
                 endVotingRound();
             }
         }
@@ -328,10 +331,8 @@ function startNewVotingRound() {
     // Reset votes for all songs
     songs.forEach(song => {
         song.votes = 0;
+        song.voters = [];
     });
-    
-    // Clear the votes map
-    votes.clear();
     
     // Reset hasVoted for all participants
     for (let [id, participant] of participants) {
