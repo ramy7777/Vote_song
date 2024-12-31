@@ -269,7 +269,7 @@ socket.on('songControl', (action) => {
     }
 });
 
-socket.on('resetVoting', () => {
+socket.on('resetVoting', (songs) => {
     console.log('Resetting voting state');
     hasVoted = false;
     updateSongsDisplay(songs);
@@ -290,7 +290,7 @@ function showScreen(screenId) {
 }
 
 function updateSongsDisplay(songs) {
-    if (!domElements.songsContainer) return;
+    if (!domElements.songsContainer || !songs) return;
 
     domElements.songsContainer.innerHTML = '';
     songs.forEach(song => {

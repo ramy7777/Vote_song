@@ -95,22 +95,41 @@ let participants = new Map(); // Store connected users
 let votes = new Map(); // Store user votes
 
 function resetGameState() {
-    // Reset songs votes
-    songs.forEach(song => song.votes = 0);
-    songs.forEach(song => song.voters = []);
+    // Reset songs votes and voters
+    songs.forEach(song => {
+        song.votes = 0;
+        song.voters = [];
+    });
     
     // Reset game state but keep the host
     const currentHost = gameState.host;
-    gameState = { ...initialGameState };
-    gameState.host = currentHost;
+    gameState = { ...initialGameState, host: currentHost };
     
-    // Clear votes
-    votes.clear();
-    
-    // Clear any existing timeouts
-    if (gameState.votingTimeout) {
-        clearTimeout(gameState.votingTimeout);
+    // Reset hasVoted for all participants
+    for (let [id, participant] of participants) {
+        participant.hasVoted = false;
     }
+    
+    // Notify clients with reset songs
+    io.emit('resetVoting', songs);
+}
+
+function startNewVotingRound() {
+    // Reset votes for all songs
+    songs.forEach(song => {
+        song.votes = 0;
+        song.voters = [];
+    });
+    
+    // Reset hasVoted for all participants
+    for (let [id, participant] of participants) {
+        participant.hasVoted = false;
+    }
+    
+    // Explicitly tell clients to reset voting state with songs
+    io.emit('resetVoting', songs);
+    
+    console.log('New voting round started');
 }
 
 // Socket.IO connection handling
@@ -348,8 +367,8 @@ function startNewVotingRound() {
         canStart: gameState.canStart
     });
     
-    // Explicitly tell clients to reset voting state
-    io.emit('resetVoting');
+    // Explicitly tell clients to reset voting state with songs
+    io.emit('resetVoting', songs);
     
     console.log('New voting round started');
 }
