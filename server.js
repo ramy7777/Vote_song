@@ -104,7 +104,8 @@ const getOrCreateSession = (sessionId) => {
             currentTime: 0,
             lastTimeUpdate: 0,
             currentSong: null,
-            gameStarted: false  // Track if game has started
+            gameStarted: false,  // Track if game has started
+            canStart: true  // Allow session to start with 1 participant
         });
     }
     return sessions.get(finalSessionId);
@@ -280,7 +281,7 @@ io.on('connection', (socket) => {
                 // Update remaining participants
                 io.to(currentSessionId).emit('updateParticipants', {
                     participants: Array.from(session.participants.values()),
-                    canStart: session.participants.size >= 1
+                    canStart: true
                 });
                 
                 // Clean up empty sessions
@@ -290,7 +291,7 @@ io.on('connection', (socket) => {
                     // Update can start status for remaining participants
                     io.to(currentSessionId).emit('updateParticipants', {
                         participants: Array.from(session.participants.values()),
-                        canStart: session.participants.size >= 1 && session.host !== null
+                        canStart: true
                     });
                 }
             }
@@ -299,6 +300,8 @@ io.on('connection', (socket) => {
 
     // Handle user joining
     socket.on('joinVoting', ({ username, isHostUser, sessionId }) => {
+        console.log('Join request:', { username, isHostUser, sessionId });
+        
         // Validate session ID if provided for joining
         if (!isHostUser && sessionId && !sessions.has(sessionId)) {
             socket.emit('error', { message: 'Session not found' });
@@ -324,24 +327,37 @@ io.on('connection', (socket) => {
         socket.join(currentSessionId);
         
         // Update session state
-        session.participants.set(socket.id, {
-            id: socket.id,
-            username,
-            isHost: isHostUser && !session.host
-        });
-        
-        // Set host if none exists and user requested host
-        if (isHostUser && !session.host) {
+        if (isHostUser) {
+            // Set up as host, just like quick join
             session.host = socket.id;
+            session.participants.set(socket.id, {
+                id: socket.id,
+                username,
+                isHost: true
+            });
+        } else {
+            // Set up as regular participant
+            session.participants.set(socket.id, {
+                id: socket.id,
+                username,
+                isHost: false
+            });
         }
         
-        // Update can start condition
-        session.canStart = session.participants.size >= 1 && session.host !== null;
+        // Update can start condition - only need 1 participant
+        session.canStart = true;  // Always allow start with 1 participant
+        console.log('Session state after join:', {
+            sessionId: currentSessionId,
+            isHost: session.host === socket.id,
+            canStart: session.canStart,
+            participantCount: session.participants.size,
+            isHostUser
+        });
         
         // Emit updated state to all participants in this session
         io.to(currentSessionId).emit('updateParticipants', {
             participants: Array.from(session.participants.values()),
-            canStart: session.canStart
+            canStart: true  // Always true, just like quick join
         });
         
         // Send session ID back to client
@@ -351,7 +367,7 @@ io.on('connection', (socket) => {
             isVoting: session.isVoting,
             currentSong: session.currentSong,
             gameStarted: session.gameStarted,
-            isNewSession: false  // Flag to skip waiting screen for joiners
+            isNewSession: isHostUser  // Show waiting screen for new host-created sessions
         });
 
         // If game is already in progress, sync the new participant
@@ -381,7 +397,8 @@ io.on('connection', (socket) => {
     socket.on('startGame', () => {
         if (currentSessionId && isHost(socket.id, currentSessionId)) {
             const session = sessions.get(currentSessionId);
-            if (session && session.participants.size >= 1) {
+            // Allow game to start with just 1 participant
+            if (session) {  
                 session.gameStarted = true;  // Mark game as started
                 startNewVotingRound(currentSessionId);
                 io.to(currentSessionId).emit('gameState', { isVoting: true });

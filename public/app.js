@@ -158,7 +158,6 @@ function initializeDOMElements() {
                 isHostUser: true,
                 sessionId: customSessionId || null
             });
-            showScreen('waiting-screen');
         }
     });
 
@@ -171,7 +170,6 @@ function initializeDOMElements() {
                 isHostUser: false,
                 sessionId
             });
-            showScreen('waiting-screen');
         }
     });
 
@@ -257,6 +255,7 @@ function initializeDOMElements() {
 
 // Socket Events
 socket.on('sessionJoined', (data) => {
+    console.log('Session joined:', data);
     currentSessionId = data.sessionId;
     isHost = data.isHost;
     
@@ -268,26 +267,32 @@ socket.on('sessionJoined', (data) => {
     // Show host controls if host
     if (domElements.hostControls) {
         domElements.hostControls.classList.toggle('hidden', !isHost);
+        if (isHost) {
+            // Enable start button immediately for host
+            domElements.startGameBtn.disabled = false;
+            domElements.startGameBtn.title = 'Click to start the game';
+            domElements.waitingMessage.textContent = 'You can start the game now!';
+        }
     }
     
-    // If game hasn't started yet, show waiting room
-    if (!data.gameStarted) {
-        showScreen('waiting-screen');
-        return;
-    }
+    // Always show waiting screen first for new sessions
+    showScreen('waiting-screen');
     
     // If game has started, show the current game state
-    if (data.isVoting) {
-        showScreen('voting-screen');
-        // Request current votes
-        socket.emit('requestVotes');
-    } else if (data.currentSong) {
-        showScreen('voting-screen');  // Contains the player
-        playSong(data.currentSong);
+    if (data.gameStarted) {
+        if (data.isVoting) {
+            showScreen('voting-screen');
+            // Request current votes
+            socket.emit('requestVotes');
+        } else if (data.currentSong) {
+            showScreen('voting-screen');  // Contains the player
+            playSong(data.currentSong);
+        }
     }
 });
 
 socket.on('updateParticipants', (data) => {
+    console.log('Update participants:', data);
     const { participants, canStart } = data;
     
     // Update participant count
@@ -306,16 +311,15 @@ socket.on('updateParticipants', (data) => {
     
     // Update waiting message and start button
     if (isHost) {
+        console.log('Host controls update:', { canStart, isHost });
         domElements.hostControls.classList.remove('hidden');
-        domElements.startGameBtn.disabled = !canStart;
+        domElements.startGameBtn.disabled = !canStart;  // Use canStart from server
         domElements.waitingMessage.textContent = canStart ? 
             'You can start the game now!' : 
-            'Waiting for more players...';
+            'Waiting for host privileges...';
     } else {
         domElements.hostControls.classList.add('hidden');
-        domElements.waitingMessage.textContent = canStart ? 
-            'Waiting for host to start...' : 
-            'Waiting for more players...';
+        domElements.waitingMessage.textContent = 'Waiting for host to start...';
     }
 });
 
