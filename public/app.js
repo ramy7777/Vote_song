@@ -15,6 +15,8 @@ let audioContextInitialized = false;
 let pendingPlay = false;
 let firstPlay = true;  // Track first play of session
 let participants = new Map(); // Add participants tracking
+let wakeLock = null;
+let audioContext;
 
 // Calculate network latency
 function updateNetworkLatency() {
@@ -55,6 +57,42 @@ function initAudioContext() {
         });
     }
 }
+
+// Request wake lock
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('Wake Lock is active');
+            
+            // Re-request wake lock if page becomes visible again
+            wakeLock.addEventListener('release', () => {
+                console.log('Wake Lock was released');
+                requestWakeLock(); // Re-request
+            });
+        }
+    } catch (err) {
+        console.error('Wake Lock error:', err);
+    }
+}
+
+// Release wake lock
+function releaseWakeLock() {
+    if (wakeLock) {
+        wakeLock.release()
+            .then(() => {
+                wakeLock = null;
+                console.log('Wake Lock released');
+            });
+    }
+}
+
+// Handle visibility change
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible') {
+        requestWakeLock();
+    }
+});
 
 // Initialize DOM Elements
 function initializeDOMElements() {
@@ -546,103 +584,145 @@ function updateSongsDisplay(songs) {
 }
 
 function playSong(song) {
-    // Re-initialize audio player if needed
-    if (!domElements.audioPlayer) {
-        domElements.audioPlayer = document.getElementById('audioPlayer');
-        if (!domElements.audioPlayer) {
-            console.error('Audio player not found!');
-            return;
-        }
-    }
-
-    if (!domElements.currentSongDiv) return;
+    if (!song) return;
     
-    domElements.currentSongDiv.classList.remove('hidden');
-    domElements.currentSongName.textContent = song.name;
+    // Request wake lock when playing
+    requestWakeLock();
     
-    // Create a new audio context if it doesn't exist
-    if (!window.audioContext) {
-        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    
-    // Set the source
-    domElements.audioPlayer.src = `/songs/${song.file}`;
-    domElements.audioPlayer.preload = 'auto';
-    
-    if (isHost) {
-        // Enable controls for host
-        domElements.audioPlayer.controls = true;
+    // Set audio attributes for background playback
+    if (domElements.audioPlayer) {
+        domElements.audioPlayer.setAttribute('playsinline', '');
+        domElements.audioPlayer.setAttribute('webkit-playsinline', '');
+        domElements.audioPlayer.setAttribute('preload', 'auto');
         
-        // Add event listeners for host controls
-        domElements.audioPlayer.addEventListener('play', () => {
-            console.log('Host: Play');
-            socket.emit('hostControl', { 
-                action: 'play',
-                time: domElements.audioPlayer.currentTime,
-                timestamp: Date.now()
-            });
-        });
+        // Enable background audio playback
+        try {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        } catch (e) {
+            console.error('Error resuming audio context:', e);
+        }
+        
+        // Re-initialize audio player if needed
+        if (!domElements.audioPlayer) {
+            domElements.audioPlayer = document.getElementById('audioPlayer');
+            if (!domElements.audioPlayer) {
+                console.error('Audio player not found!');
+                return;
+            }
+        }
 
-        // More frequent time updates
-        let lastUpdate = 0;
-        domElements.audioPlayer.addEventListener('timeupdate', () => {
-            const now = Date.now();
-            if (now - lastUpdate > syncInterval) {
-                socket.emit('timeUpdate', {
+        domElements.currentSongDiv.classList.remove('hidden');
+        domElements.currentSongName.textContent = song.name;
+        
+        // Create a new audio context if it doesn't exist
+        if (!window.audioContext) {
+            window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        // Set the source
+        domElements.audioPlayer.src = `/songs/${song.file}`;
+        domElements.audioPlayer.preload = 'auto';
+        
+        if (isHost) {
+            // Enable controls for host
+            domElements.audioPlayer.controls = true;
+            
+            // Add event listeners for host controls
+            domElements.audioPlayer.addEventListener('play', () => {
+                console.log('Host: Play');
+                socket.emit('hostControl', { 
+                    action: 'play',
                     time: domElements.audioPlayer.currentTime,
-                    timestamp: now
+                    timestamp: Date.now()
                 });
-                lastUpdate = now;
+            });
+
+            // More frequent time updates
+            let lastUpdate = 0;
+            domElements.audioPlayer.addEventListener('timeupdate', () => {
+                const now = Date.now();
+                if (now - lastUpdate > syncInterval) {
+                    socket.emit('timeUpdate', {
+                        time: domElements.audioPlayer.currentTime,
+                        timestamp: now
+                    });
+                    lastUpdate = now;
+                }
+            });
+
+            domElements.audioPlayer.addEventListener('ended', () => {
+                console.log('Host: Song ended naturally');
+                socket.emit('hostControl', { action: 'ended' });
+                socket.emit('songEnded');
+            });
+
+            // Add stop button handler
+            if (domElements.stopButton) {
+                domElements.stopButton.classList.remove('hidden');
+                domElements.stopButton.onclick = () => {
+                    console.log('Host: Stop button clicked');
+                    socket.emit('hostControl', { action: 'stop' });
+                    domElements.audioPlayer.pause();
+                    domElements.audioPlayer.currentTime = 0;
+                    showScreen('voting-screen');
+                    releaseWakeLock();  // Release wake lock when stopping
+                };
+            }
+
+            // Start playing for host
+            domElements.audioPlayer.play().catch(console.error);
+        } else {
+            // For non-host clients
+            domElements.audioPlayer.controls = false;
+            if (domElements.stopButton) {
+                domElements.stopButton.classList.add('hidden');
+            }
+            // Start playing for clients
+            domElements.audioPlayer.play().catch(error => {
+                console.error('Client playback failed:', error);
+                if (error.name === 'NotAllowedError') {
+                    showPlayButton();
+                }
+            });
+        }
+
+        // Add buffering event listeners
+        domElements.audioPlayer.addEventListener('waiting', () => {
+            console.log('Audio buffering...');
+            if (isHost) {
+                socket.emit('hostControl', { action: 'buffer' });
             }
         });
 
-        domElements.audioPlayer.addEventListener('ended', () => {
-            console.log('Host: Song ended naturally');
-            socket.emit('hostControl', { action: 'ended' });
-            socket.emit('songEnded');
+        domElements.audioPlayer.addEventListener('canplay', () => {
+            console.log('Audio ready to play');
+            if (isHost) {
+                socket.emit('hostControl', { action: 'ready' });
+            }
         });
+        
+        // Add ended event listener
+        domElements.audioPlayer.addEventListener('ended', () => {
+            releaseWakeLock();  // Release wake lock when song ends
+        });
+    }
+}
 
-        // Add stop button handler
-        if (domElements.stopButton) {
-            domElements.stopButton.classList.remove('hidden');
-            domElements.stopButton.onclick = () => {
-                console.log('Host: Stop button clicked');
-                socket.emit('hostControl', { action: 'stop' });
+// Update stop button handler
+if (domElements.stopButton) {
+    domElements.stopButton.addEventListener('click', () => {
+        if (isHost) {
+            socket.emit('hostControl', { action: 'stop' });
+            hasVoted = false;
+            if (domElements.audioPlayer) {
                 domElements.audioPlayer.pause();
                 domElements.audioPlayer.currentTime = 0;
-                showScreen('voting-screen');
-            };
-        }
-
-        // Start playing for host
-        domElements.audioPlayer.play().catch(console.error);
-    } else {
-        // For non-host clients
-        domElements.audioPlayer.controls = false;
-        if (domElements.stopButton) {
-            domElements.stopButton.classList.add('hidden');
-        }
-        // Start playing for clients
-        domElements.audioPlayer.play().catch(error => {
-            console.error('Client playback failed:', error);
-            if (error.name === 'NotAllowedError') {
-                showPlayButton();
+                releaseWakeLock();  // Release wake lock when stopping
             }
-        });
-    }
-
-    // Add buffering event listeners
-    domElements.audioPlayer.addEventListener('waiting', () => {
-        console.log('Audio buffering...');
-        if (isHost) {
-            socket.emit('hostControl', { action: 'buffer' });
-        }
-    });
-
-    domElements.audioPlayer.addEventListener('canplay', () => {
-        console.log('Audio ready to play');
-        if (isHost) {
-            socket.emit('hostControl', { action: 'ready' });
+            domElements.currentSongDiv.classList.add('hidden');
+            showScreen('voting-screen');
         }
     });
 }
