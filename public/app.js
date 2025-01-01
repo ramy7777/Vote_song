@@ -212,44 +212,34 @@ socket.on('sessionJoined', (data) => {
 });
 
 socket.on('updateParticipants', (data) => {
-    if (domElements.participantCount) {
-        domElements.participantCount.textContent = data.participants.length;
-        domElements.votingParticipantCount.textContent = data.participants.length;
-    }
-
-    // Update participants map
-    participants.clear();
-    data.participants.forEach(participant => {
-        participants.set(participant.id, participant);
-    });
-
+    const { participants, canStart } = data;
+    
+    // Update participant count
+    const participantCount = participants.length;
+    domElements.participantCount.textContent = participantCount;
+    domElements.votingParticipantCount.textContent = participantCount;
+    
     // Update participant list
-    if (domElements.participantList) {
-        domElements.participantList.innerHTML = '';
-        data.participants.forEach(participant => {
-            const li = document.createElement('li');
-            li.textContent = `${participant.username}${participant.isHost ? ' (Host)' : ''}`;
-            domElements.participantList.appendChild(li);
-        });
-    }
-
-    // Update host controls and start button
-    if (domElements.hostControls && isHost) {
+    domElements.participantList.innerHTML = '';
+    participants.forEach(participant => {
+        const div = document.createElement('div');
+        div.className = 'participant';
+        div.textContent = `${participant.username}${participant.isHost ? ' (Host)' : ''}`;
+        domElements.participantList.appendChild(div);
+    });
+    
+    // Update waiting message and start button
+    if (isHost) {
         domElements.hostControls.classList.remove('hidden');
-        if (domElements.startGameBtn) {
-            domElements.startGameBtn.disabled = !data.canStart;
-            domElements.startGameBtn.title = data.canStart ? 
-                'Start the game' : 
-                'Need between 2 and 30 players to start';
-        }
-    }
-
-    // Update waiting message
-    if (domElements.waitingMessage) {
-        const neededPlayers = data.participants.length < 2 ? 2 - data.participants.length : 0;
-        domElements.waitingMessage.textContent = neededPlayers > 0 ?
-            `Waiting for ${neededPlayers} more player${neededPlayers > 1 ? 's' : ''}...` :
-            'Waiting for host to start the game...';
+        domElements.startGameBtn.disabled = !canStart;
+        domElements.waitingMessage.textContent = canStart ? 
+            'You can start the game now!' : 
+            'Waiting for more players...';
+    } else {
+        domElements.hostControls.classList.add('hidden');
+        domElements.waitingMessage.textContent = canStart ? 
+            'Waiting for host to start...' : 
+            'Waiting for more players...';
     }
 });
 

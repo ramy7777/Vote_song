@@ -205,7 +205,7 @@ io.on('connection', (socket) => {
             socket.join(activeQuickSession);
             
             // Update session state
-            session.canStart = session.participants.size >= 2;
+            session.canStart = session.participants.size >= 1;
             
             // Send session info to the joining player
             socket.emit('sessionJoined', {
@@ -247,7 +247,7 @@ io.on('connection', (socket) => {
             // Update participants list
             io.to(quickSessionId).emit('updateParticipants', {
                 participants: Array.from(session.participants.values()),
-                canStart: false
+                canStart: true
             });
             
             updateLastActivity(quickSessionId);
@@ -270,12 +270,18 @@ io.on('connection', (socket) => {
                 // Update remaining participants
                 io.to(currentSessionId).emit('updateParticipants', {
                     participants: Array.from(session.participants.values()),
-                    canStart: session.participants.size >= 2
+                    canStart: session.participants.size >= 1
                 });
                 
                 // Clean up empty sessions
                 if (session.participants.size === 0) {
                     sessions.delete(currentSessionId);
+                } else {
+                    // Update can start status for remaining participants
+                    io.to(currentSessionId).emit('updateParticipants', {
+                        participants: Array.from(session.participants.values()),
+                        canStart: session.participants.size >= 1 && session.host !== null
+                    });
                 }
             }
         }
@@ -320,7 +326,7 @@ io.on('connection', (socket) => {
         }
         
         // Update can start condition
-        session.canStart = session.participants.size >= 2 && session.host !== null;
+        session.canStart = session.participants.size >= 1 && session.host !== null;
         
         // Emit updated state to all participants in this session
         io.to(currentSessionId).emit('updateParticipants', {
@@ -341,9 +347,11 @@ io.on('connection', (socket) => {
     socket.on('startGame', () => {
         if (currentSessionId && isHost(socket.id, currentSessionId)) {
             const session = sessions.get(currentSessionId);
-            startNewVotingRound(currentSessionId);
-            io.to(currentSessionId).emit('gameState', { isVoting: true });
-            updateLastActivity(currentSessionId);
+            if (session && session.participants.size >= 1) {
+                startNewVotingRound(currentSessionId);
+                io.to(currentSessionId).emit('gameState', { isVoting: true });
+                updateLastActivity(currentSessionId);
+            }
         }
     });
 
