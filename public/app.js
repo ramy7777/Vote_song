@@ -303,14 +303,15 @@ socket.on('playSong', (song) => {
 socket.on('syncTime', (hostTime) => {
     if (!isHost && domElements.audioPlayer && !domElements.audioPlayer.paused) {
         const currentTime = domElements.audioPlayer.currentTime;
-        const diff = Math.abs(hostTime - currentTime);
+        const latencyCompensatedTime = hostTime + (networkLatency / 1000);
+        const drift = Math.abs(currentTime - latencyCompensatedTime);
         
-        // Only sync if difference is more than 0.2 seconds
-        if (diff > 0.2) {
-            console.log('Syncing time - Host:', hostTime, 'Client:', currentTime, 'Diff:', diff);
+        // If drift is more than 0.2 seconds, sync the time
+        if (drift > 0.2) {
+            console.log('Syncing time - Host:', hostTime, 'Client:', currentTime, 'Diff:', drift);
             
             // Gradually adjust the playback rate to catch up or slow down
-            if (currentTime < hostTime) {
+            if (currentTime < latencyCompensatedTime) {
                 domElements.audioPlayer.playbackRate = 1.05; // Speed up slightly
                 setTimeout(() => {
                     domElements.audioPlayer.playbackRate = 1.0;
@@ -333,6 +334,22 @@ socket.on('syncTime', (hostTime) => {
 socket.on('hostControl', (data) => {
     if (!isHost && domElements.audioPlayer) {
         console.log('Client: Received host control:', data);
+        
+        if (data.action === 'stop') {
+            console.log('Client: Stopping playback');
+            domElements.audioPlayer.pause();
+            domElements.audioPlayer.currentTime = 0;
+            domElements.currentSongDiv.classList.add('hidden');
+            showScreen('voting-screen');
+            // Reset any pending play state
+            pendingPlay = false;
+            // Remove all event listeners and recreate audio player
+            const newAudioPlayer = document.createElement('audio');
+            newAudioPlayer.id = 'audioPlayer';
+            domElements.audioPlayer.replaceWith(newAudioPlayer);
+            domElements.audioPlayer = newAudioPlayer;
+            return; // Don't process any other actions after stop
+        }
         
         if (data.action === 'play') {
             if (!audioContextInitialized) {
@@ -362,14 +379,21 @@ socket.on('hostControl', (data) => {
             if (data.time) {
                 domElements.audioPlayer.currentTime = data.time;
             }
-        } else if (data.action === 'stop' || data.action === 'ended') {
-            console.log('Client: Stopping playback');
+        } else if (data.action === 'ended') {
+            console.log('Client: Song ended');
             domElements.audioPlayer.pause();
             domElements.audioPlayer.currentTime = 0;
             domElements.currentSongDiv.classList.add('hidden');
             showScreen('voting-screen');
+            pendingPlay = false;
+            // Remove all event listeners and recreate audio player
+            const newAudioPlayer = document.createElement('audio');
+            newAudioPlayer.id = 'audioPlayer';
+            domElements.audioPlayer.replaceWith(newAudioPlayer);
+            domElements.audioPlayer = newAudioPlayer;
         } else if (data.action === 'buffer') {
             console.log('Host is buffering...');
+            domElements.audioPlayer.pause();
         } else if (data.action === 'ready') {
             console.log('Host is ready to play');
         }
@@ -446,7 +470,7 @@ socket.on('startVoting', () => {
     if (domElements.currentSongDiv) {
         domElements.currentSongDiv.classList.add('hidden');
     }
-    updateSongsDisplay(songs);
+    showScreen('voting-screen');
 });
 
 // Helper Functions
@@ -509,6 +533,15 @@ function updateSongsDisplay(songs) {
 }
 
 function playSong(song) {
+    // Re-initialize audio player if needed
+    if (!domElements.audioPlayer) {
+        domElements.audioPlayer = document.getElementById('audioPlayer');
+        if (!domElements.audioPlayer) {
+            console.error('Audio player not found!');
+            return;
+        }
+    }
+
     if (!domElements.currentSongDiv) return;
     
     domElements.currentSongDiv.classList.remove('hidden');

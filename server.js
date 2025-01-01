@@ -408,6 +408,17 @@ io.on('connection', (socket) => {
         if (currentSessionId && isHost(socket.id, currentSessionId)) {
             const session = sessions.get(currentSessionId);
             
+            if (data.action === 'stop') {
+                // Immediately notify clients to stop
+                socket.to(currentSessionId).emit('hostControl', { action: 'stop' });
+                // Wait a bit before starting new voting round to ensure stop is processed
+                setTimeout(() => {
+                    startNewVotingRound(currentSessionId);
+                }, 500);
+                updateLastActivity(currentSessionId);
+                return;
+            }
+            
             if (data.action === 'buffer') {
                 // Notify clients about buffering
                 socket.to(currentSessionId).emit('hostControl', { action: 'pause' });
@@ -417,12 +428,17 @@ io.on('connection', (socket) => {
                     action: 'play',
                     time: session.currentTime
                 });
-            } else if (data.action === 'stop' || data.action === 'ended') {
-                startNewVotingRound(currentSessionId);
+            } else if (data.action === 'ended') {
+                socket.to(currentSessionId).emit('hostControl', { action: 'ended' });
+                // Wait a bit before starting new voting round
+                setTimeout(() => {
+                    startNewVotingRound(currentSessionId);
+                }, 500);
+            } else {
+                // Forward other control messages to clients
+                socket.to(currentSessionId).emit('hostControl', data);
             }
             
-            // Forward control message to clients
-            socket.to(currentSessionId).emit('hostControl', data);
             updateLastActivity(currentSessionId);
         }
     });
