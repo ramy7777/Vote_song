@@ -13,6 +13,7 @@ let networkLatency = 0;
 let lastPing = 0;
 let audioContextInitialized = false;
 let pendingPlay = false;
+let firstPlay = true;  // Track first play of session
 let participants = new Map(); // Add participants tracking
 
 // Calculate network latency
@@ -40,11 +41,17 @@ function initAudioContext() {
             console.log('AudioContext initialized');
             audioContextInitialized = true;
             if (pendingPlay && domElements.audioPlayer) {
-                domElements.audioPlayer.play().catch(console.error);
+                domElements.audioPlayer.play().catch(error => {
+                    console.error('Playback failed after init:', error);
+                    if (error.name === 'NotAllowedError') {
+                        showPlayButton();
+                    }
+                });
                 pendingPlay = false;
             }
         }).catch(error => {
             console.error('Failed to initialize AudioContext:', error);
+            showPlayButton();
         });
     }
 }
@@ -352,7 +359,8 @@ socket.on('hostControl', (data) => {
         }
         
         if (data.action === 'play') {
-            if (!audioContextInitialized) {
+            // Show play button for first play or if audio context not initialized
+            if (firstPlay || !audioContextInitialized) {
                 pendingPlay = true;
                 showPlayButton();
                 return;
@@ -652,6 +660,7 @@ function showPlayButton() {
                 playPromise.then(() => {
                     button.remove();
                     audioContextInitialized = true;
+                    firstPlay = false;  // Mark first play as done
                     pendingPlay = false;
                 }).catch(error => {
                     console.error('Playback still failed:', error);
