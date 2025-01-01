@@ -27,7 +27,7 @@ socket.on('pong', () => {
 });
 
 // Start regular latency updates
-setInterval(updateNetworkLatency, 5000);
+setInterval(updateNetworkLatency, 2000);
 
 // Initialize audio context on first user interaction
 function initAudioContext() {
