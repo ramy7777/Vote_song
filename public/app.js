@@ -8,7 +8,7 @@ let hasVoted = false;
 let songs = [];
 let serverTimeOffset = 0;
 let lastSyncTime = 0;
-let syncInterval = 100; // Sync every 100ms instead of 1000ms
+let syncInterval = 50; // Sync every 50ms for more frequent updates
 let networkLatency = 0;
 let lastPing = 0;
 let audioContextInitialized = false;
@@ -356,26 +356,26 @@ socket.on('syncTime', (hostTime) => {
         const latencyCompensatedTime = hostTime + (networkLatency / 1000);
         const drift = Math.abs(currentTime - latencyCompensatedTime);
         
-        // If drift is more than 0.2 seconds, sync the time
-        if (drift > 0.2) {
+        // If drift is more than 0.1 seconds, sync the time
+        if (drift > 0.1) {
             console.log('Syncing time - Host:', hostTime, 'Client:', currentTime, 'Diff:', drift);
             
             // Gradually adjust the playback rate to catch up or slow down
             if (currentTime < latencyCompensatedTime) {
-                domElements.audioPlayer.playbackRate = 1.05; // Speed up slightly
+                domElements.audioPlayer.playbackRate = 1.1; // Speed up more aggressively
                 setTimeout(() => {
                     domElements.audioPlayer.playbackRate = 1.0;
-                }, 1000);
+                }, 500); // Shorter adjustment period
             } else {
-                domElements.audioPlayer.playbackRate = 0.95; // Slow down slightly
+                domElements.audioPlayer.playbackRate = 0.9; // Slow down more aggressively
                 setTimeout(() => {
                     domElements.audioPlayer.playbackRate = 1.0;
-                }, 1000);
+                }, 500); // Shorter adjustment period
             }
             
             // If the difference is too large, sync immediately
-            if (diff > 1) {
-                domElements.audioPlayer.currentTime = hostTime;
+            if (drift > 0.5) {
+                domElements.audioPlayer.currentTime = latencyCompensatedTime;
             }
         }
     }
