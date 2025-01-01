@@ -99,10 +99,12 @@ const getOrCreateSession = (sessionId) => {
             host: null,
             participants: new Map(),
             songs: songs.map(song => ({ ...song, votes: 0, voters: [] })),
-            isVoting: true,
+            isVoting: false,
             lastActivity: Date.now(),
             currentTime: 0,
-            lastTimeUpdate: 0
+            lastTimeUpdate: 0,
+            currentSong: null,
+            gameStarted: false  // Track if game has started
         });
     }
     return sessions.get(finalSessionId);
@@ -210,7 +212,11 @@ io.on('connection', (socket) => {
             // Send session info to the joining player
             socket.emit('sessionJoined', {
                 sessionId: activeQuickSession,
-                isHost: false
+                isHost: false,
+                isVoting: session.isVoting,
+                currentSong: session.currentSong,
+                gameStarted: session.gameStarted,
+                isNewSession: false  // Flag to skip waiting screen for joiners
             });
             
             // Emit updated state to all participants
@@ -241,7 +247,11 @@ io.on('connection', (socket) => {
             // Send session info to host
             socket.emit('sessionJoined', {
                 sessionId: quickSessionId,
-                isHost: true
+                isHost: true,
+                isVoting: session.isVoting,
+                currentSong: session.currentSong,
+                gameStarted: session.gameStarted,
+                isNewSession: true  // Flag to show waiting screen for new sessions
             });
             
             // Update participants list
@@ -337,8 +347,32 @@ io.on('connection', (socket) => {
         // Send session ID back to client
         socket.emit('sessionJoined', {
             sessionId: currentSessionId,
-            isHost: session.host === socket.id
+            isHost: session.host === socket.id,
+            isVoting: session.isVoting,
+            currentSong: session.currentSong,
+            gameStarted: session.gameStarted,
+            isNewSession: false  // Flag to skip waiting screen for joiners
         });
+
+        // If game is already in progress, sync the new participant
+        if (session.isVoting) {
+            // Send current voting state and show voting screen
+            socket.emit('gameState', { isVoting: true });
+            // Send current songs with votes
+            const songsWithVoters = session.songs.map(s => ({
+                ...s,
+                voterNames: s.voters.map(voterId => {
+                    const voter = session.participants.get(voterId);
+                    return voter ? voter.username : 'Unknown';
+                })
+            }));
+            socket.emit('startVoting', songsWithVoters);
+            socket.emit('updateVotes', songsWithVoters);
+        } else if (session.currentSong) {
+            // If a song is currently playing, sync the new participant
+            socket.emit('gameState', { isVoting: false });
+            socket.emit('playSong', session.currentSong);
+        }
         
         updateLastActivity(currentSessionId);
     });
@@ -348,6 +382,7 @@ io.on('connection', (socket) => {
         if (currentSessionId && isHost(socket.id, currentSessionId)) {
             const session = sessions.get(currentSessionId);
             if (session && session.participants.size >= 1) {
+                session.gameStarted = true;  // Mark game as started
                 startNewVotingRound(currentSessionId);
                 io.to(currentSessionId).emit('gameState', { isVoting: true });
                 updateLastActivity(currentSessionId);
@@ -390,6 +425,7 @@ io.on('connection', (socket) => {
                         
                         // End voting and play the winning song
                         session.isVoting = false;
+                        session.currentSong = winnerSong;  // Track current song
                         io.to(currentSessionId).emit('playSong', winnerSong);
                     }
                 }
@@ -419,6 +455,7 @@ io.on('connection', (socket) => {
             if (data.action === 'stop') {
                 // Immediately notify clients to stop
                 socket.to(currentSessionId).emit('hostControl', { action: 'stop' });
+                session.currentSong = null;  // Clear current song
                 // Wait a bit before starting new voting round to ensure stop is processed
                 setTimeout(() => {
                     startNewVotingRound(currentSessionId);
@@ -455,6 +492,23 @@ io.on('connection', (socket) => {
     socket.on('songEnded', () => {
         if (currentSessionId && isHost(socket.id, currentSessionId)) {
             startNewVotingRound(currentSessionId);
+        }
+    });
+
+    // Handle vote request from late joiners
+    socket.on('requestVotes', () => {
+        if (currentSessionId) {
+            const session = sessions.get(currentSessionId);
+            if (session && session.isVoting) {
+                const songsWithVoters = session.songs.map(s => ({
+                    ...s,
+                    voterNames: s.voters.map(voterId => {
+                        const voter = session.participants.get(voterId);
+                        return voter ? voter.username : 'Unknown';
+                    })
+                }));
+                socket.emit('updateVotes', songsWithVoters);
+            }
         }
     });
 });

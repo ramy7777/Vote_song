@@ -207,8 +207,21 @@ socket.on('sessionJoined', (data) => {
         domElements.hostControls.classList.toggle('hidden', !isHost);
     }
     
-    // Show waiting screen
-    showScreen('waiting-screen');
+    // If game hasn't started yet, show waiting room
+    if (!data.gameStarted) {
+        showScreen('waiting-screen');
+        return;
+    }
+    
+    // If game has started, show the current game state
+    if (data.isVoting) {
+        showScreen('voting-screen');
+        // Request current votes
+        socket.emit('requestVotes');
+    } else if (data.currentSong) {
+        showScreen('voting-screen');  // Contains the player
+        playSong(data.currentSong);
+    }
 });
 
 socket.on('updateParticipants', (data) => {
@@ -256,16 +269,17 @@ socket.on('error', (data) => {
     // You could show this error to the user in a more user-friendly way
 });
 
-socket.on('gameState', (state) => {
-    console.log('Received game state:', state);
-    songs = state.songs; // Update songs when game state is received
-    if (state.isVoting) {
+socket.on('gameState', (data) => {
+    console.log('Received game state:', data);
+    songs = data.songs; // Update songs when game state is received
+    if (data.isVoting) {
         showScreen('voting-screen');
         updateSongsDisplay(songs);
     }
     
-    if (state.currentSong) {
-        playSong(state.currentSong);
+    if (data.currentSong) {
+        showScreen('voting-screen');  // Show voting screen as it contains the player
+        playSong(data.currentSong);
     } else {
         if (domElements.currentSongDiv) {
             domElements.currentSongDiv.classList.add('hidden');
@@ -294,6 +308,7 @@ socket.on('updateVotes', (songs) => {
 });
 
 socket.on('playSong', (song) => {
+    showScreen('voting-screen');  // Show voting screen as it contains the player
     playSong(song);
 });
 
