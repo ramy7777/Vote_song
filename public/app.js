@@ -9,6 +9,7 @@ let pendingPlay = false;
 let serverTimeOffset = 0;
 let currentSessionId = null;
 let participants = new Map(); // Add participants tracking
+let songs = []; // Add global songs variable
 
 // Initialize audio context on first user interaction
 function initAudioContext() {
@@ -234,13 +235,10 @@ socket.on('error', (data) => {
 
 socket.on('gameState', (state) => {
     console.log('Received game state:', state);
-    
+    songs = state.songs; // Update songs when game state is received
     if (state.isVoting) {
         showScreen('voting-screen');
-        if (state.songs) {
-            hasVoted = false;
-            updateSongsDisplay(state.songs);
-        }
+        updateSongsDisplay(songs);
     }
     
     if (state.currentSong) {
