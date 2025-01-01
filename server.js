@@ -19,46 +19,82 @@ app.use(express.static('public'));
 // GitHub repository configuration
 const GITHUB_USER = process.env.GITHUB_USER || 'ramy7777';
 const GITHUB_REPO = process.env.GITHUB_REPO || 'Vote_song';
+const GITHUB_BRANCH = process.env.GITHUB_BRANCH || 'songs';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+
+// Function to get raw GitHub URL for a file
+function getRawGitHubUrl(filename) {
+  return `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/public/songs/${filename}`;
+}
 
 // Function to fetch song list from GitHub
 async function fetchSongsFromGitHub() {
   try {
+    console.log('Fetching songs from GitHub...');
     const headers = {
       'Accept': 'application/vnd.github.v3+json',
       'User-Agent': 'vote-song-app'
     };
-    
-    if (GITHUB_TOKEN) {
-      headers['Authorization'] = `token ${GITHUB_TOKEN}`;
+
+    // Fetch the contents of the songs directory
+    const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/public/songs?ref=${GITHUB_BRANCH}`;
+    console.log('Fetching from:', apiUrl);
+
+    const response = await axios.get(apiUrl, { headers });
+    console.log('GitHub API Response:', JSON.stringify(response.data, null, 2));
+
+    if (!Array.isArray(response.data)) {
+      console.error('Unexpected response format:', response.data);
+      return [];
     }
 
-    // Fetch the latest release
-    const releaseResponse = await axios.get(
-      `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/releases/latest`,
-      { headers }
-    );
+    // Filter for MP3 files and create songs array
+    const songs = response.data
+      .filter(file => {
+        const isMp3 = file.name.toLowerCase().endsWith('.mp3');
+        console.log(`File ${file.name} is MP3: ${isMp3}`);
+        return isMp3;
+      })
+      .map((file, index) => {
+        const url = getRawGitHubUrl(file.name);
+        console.log(`Creating song ${index + 1}:`, {
+          name: file.name,
+          url: url
+        });
+        
+        return {
+          id: index + 1,
+          name: file.name.replace('.mp3', '').replace(/_/g, ' '),
+          url: url,
+          votes: 0,
+          voters: []
+        };
+      });
 
-    const release = releaseResponse.data;
-    
-    // Map the assets to our song format
-    const songs = release.assets.map((asset, index) => ({
-      id: index + 1,
-      name: asset.name.replace('.mp3', ''),
-      url: asset.browser_download_url,
-      votes: 0,
-      voters: []
-    }));
-
+    console.log(`Found ${songs.length} songs:`, songs);
     return songs;
   } catch (error) {
     console.error('Error fetching songs from GitHub:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error('Full error:', error);
+    }
     return [];
   }
 }
 
 // Initialize songs array
 let songs = [];
+
+// Initial song fetch
+fetchSongsFromGitHub().then(newSongs => {
+  if (newSongs.length > 0) {
+    songs = newSongs;
+    console.log('Initial songs loaded from GitHub');
+  }
+});
 
 // Update songs list every hour
 setInterval(async () => {
@@ -73,14 +109,6 @@ setInterval(async () => {
     console.error('Error updating songs:', error);
   }
 }, 60 * 60 * 1000);
-
-// Initial song fetch
-fetchSongsFromGitHub().then(newSongs => {
-  if (newSongs.length > 0) {
-    songs = newSongs;
-    console.log('Initial songs loaded from GitHub');
-  }
-});
 
 // Sessions management
 const sessions = new Map();
