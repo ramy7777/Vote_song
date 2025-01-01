@@ -100,7 +100,9 @@ const getOrCreateSession = (sessionId) => {
             participants: new Map(),
             songs: songs.map(song => ({ ...song, votes: 0, voters: [] })),
             isVoting: true,
-            lastActivity: Date.now()
+            lastActivity: Date.now(),
+            currentTime: 0,
+            lastTimeUpdate: 0
         });
     }
     return sessions.get(finalSessionId);
@@ -179,6 +181,11 @@ let activeQuickSession = null; // Track the active quick session
 io.on('connection', (socket) => {
     console.log('New connection:', socket.id);
     let currentSessionId = null;
+
+    // Handle ping for latency calculation
+    socket.on('ping', () => {
+        socket.emit('pong');
+    });
 
     // Handle quick join
     socket.on('quickJoin', ({ username }) => {
@@ -383,16 +390,38 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Handle time synchronization
+    socket.on('timeUpdate', (data) => {
+        if (currentSessionId && isHost(socket.id, currentSessionId)) {
+            const session = sessions.get(currentSessionId);
+            if (session) {
+                session.currentTime = data.time;
+                session.lastTimeUpdate = data.timestamp;
+                // Broadcast time update to all clients except host
+                socket.to(currentSessionId).emit('timeUpdate', data.time);
+            }
+        }
+    });
+
     // Handle host audio control
     socket.on('hostControl', (data) => {
         if (currentSessionId && isHost(socket.id, currentSessionId)) {
             const session = sessions.get(currentSessionId);
             
-            // If stop or ended action, start new voting round
-            if (data.action === 'stop' || data.action === 'ended') {
+            if (data.action === 'buffer') {
+                // Notify clients about buffering
+                socket.to(currentSessionId).emit('hostControl', { action: 'pause' });
+            } else if (data.action === 'ready') {
+                // Notify clients that buffering is complete
+                socket.to(currentSessionId).emit('hostControl', { 
+                    action: 'play',
+                    time: session.currentTime
+                });
+            } else if (data.action === 'stop' || data.action === 'ended') {
                 startNewVotingRound(currentSessionId);
             }
             
+            // Forward control message to clients
             socket.to(currentSessionId).emit('hostControl', data);
             updateLastActivity(currentSessionId);
         }
@@ -402,14 +431,6 @@ io.on('connection', (socket) => {
     socket.on('songEnded', () => {
         if (currentSessionId && isHost(socket.id, currentSessionId)) {
             startNewVotingRound(currentSessionId);
-        }
-    });
-
-    // Handle time synchronization
-    socket.on('timeUpdate', (time) => {
-        if (currentSessionId && isHost(socket.id, currentSessionId)) {
-            socket.to(currentSessionId).emit('syncTime', time);
-            updateLastActivity(currentSessionId);
         }
     });
 });

@@ -3,16 +3,38 @@ const socket = io();
 let domElements = {};
 let username;
 let isHost = false;
+let currentSessionId = null;
 let hasVoted = false;
+let songs = [];
+let serverTimeOffset = 0;
+let lastSyncTime = 0;
+let syncInterval = 100; // Sync every 100ms instead of 1000ms
+let networkLatency = 0;
+let lastPing = 0;
 let audioContextInitialized = false;
 let pendingPlay = false;
-let serverTimeOffset = 0;
-let currentSessionId = null;
 let participants = new Map(); // Add participants tracking
-let songs = []; // Add global songs variable
+
+// Calculate network latency
+function updateNetworkLatency() {
+    lastPing = Date.now();
+    socket.emit('ping');
+}
+
+socket.on('pong', () => {
+    networkLatency = (Date.now() - lastPing) / 2; // RTT/2 for one-way latency
+    console.log('Network latency:', networkLatency, 'ms');
+});
+
+// Start regular latency updates
+setInterval(updateNetworkLatency, 5000);
 
 // Initialize audio context on first user interaction
 function initAudioContext() {
+    if (!window.audioContext) {
+        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
     if (!audioContextInitialized && window.audioContext) {
         window.audioContext.resume().then(() => {
             console.log('AudioContext initialized');
@@ -21,6 +43,8 @@ function initAudioContext() {
                 domElements.audioPlayer.play().catch(console.error);
                 pendingPlay = false;
             }
+        }).catch(error => {
+            console.error('Failed to initialize AudioContext:', error);
         });
     }
 }
@@ -115,6 +139,7 @@ function initializeDOMElements() {
                 socket.emit('hostControl', 'stop');
                 domElements.audioPlayer.pause();
                 domElements.audioPlayer.currentTime = 0;
+                showScreen('voting-screen');
             }
         });
     }
@@ -154,6 +179,7 @@ function initializeDOMElements() {
                     domElements.audioPlayer.currentTime = 0;
                 }
                 domElements.currentSongDiv.classList.add('hidden');
+                showScreen('voting-screen');
             }
         });
     }
@@ -315,9 +341,11 @@ socket.on('hostControl', (data) => {
                 return;
             }
             
-            // Set initial time if provided
+            // Compensate for network latency
             if (data.time) {
-                domElements.audioPlayer.currentTime = data.time;
+                const serverTime = data.time;
+                const latencyCompensatedTime = serverTime + (networkLatency / 1000);
+                domElements.audioPlayer.currentTime = latencyCompensatedTime;
             }
 
             const playPromise = domElements.audioPlayer.play();
@@ -334,10 +362,41 @@ socket.on('hostControl', (data) => {
             if (data.time) {
                 domElements.audioPlayer.currentTime = data.time;
             }
-        } else if (data.action === 'stop') {
+        } else if (data.action === 'stop' || data.action === 'ended') {
+            console.log('Client: Stopping playback');
             domElements.audioPlayer.pause();
             domElements.audioPlayer.currentTime = 0;
+            domElements.currentSongDiv.classList.add('hidden');
             showScreen('voting-screen');
+        } else if (data.action === 'buffer') {
+            console.log('Host is buffering...');
+        } else if (data.action === 'ready') {
+            console.log('Host is ready to play');
+        }
+    }
+});
+
+socket.on('timeUpdate', (serverTime) => {
+    if (!isHost && domElements.audioPlayer) {
+        const currentTime = domElements.audioPlayer.currentTime;
+        const latencyCompensatedTime = serverTime + (networkLatency / 1000);
+        const drift = Math.abs(currentTime - latencyCompensatedTime);
+        
+        // If drift is more than 200ms, sync the time
+        if (drift > 0.2) {
+            console.log('Correcting drift:', drift, 'seconds');
+            // Smoothly adjust playback rate to catch up/slow down
+            if (currentTime < latencyCompensatedTime) {
+                domElements.audioPlayer.playbackRate = 1.1; // Speed up slightly
+                setTimeout(() => {
+                    domElements.audioPlayer.playbackRate = 1.0;
+                }, 1000);
+            } else {
+                domElements.audioPlayer.playbackRate = 0.9; // Slow down slightly
+                setTimeout(() => {
+                    domElements.audioPlayer.playbackRate = 1.0;
+                }, 1000);
+            }
         }
     }
 });
@@ -462,35 +521,8 @@ function playSong(song) {
     
     // Set the source
     domElements.audioPlayer.src = `/songs/${song.file}`;
+    domElements.audioPlayer.preload = 'auto';
     
-    // Add event listeners for buffering
-    domElements.audioPlayer.addEventListener('waiting', () => {
-        console.log('Audio buffering...');
-    });
-    
-    domElements.audioPlayer.addEventListener('canplay', () => {
-        console.log('Audio ready to play');
-        if (isHost) {
-            socket.emit('hostControl', 'ready');
-        }
-    });
-
-    domElements.audioPlayer.addEventListener('play', () => {
-        // Ensure audio context is running
-        if (window.audioContext && window.audioContext.state === 'suspended') {
-            window.audioContext.resume();
-        }
-    });
-
-    // Add error handling
-    domElements.audioPlayer.addEventListener('error', (e) => {
-        console.error('Audio playback error:', e);
-        if (e.target.error) {
-            console.error('Error code:', e.target.error.code);
-            console.error('Error message:', e.target.error.message);
-        }
-    });
-
     if (isHost) {
         // Enable controls for host
         domElements.audioPlayer.controls = true;
@@ -500,17 +532,20 @@ function playSong(song) {
             console.log('Host: Play');
             socket.emit('hostControl', { 
                 action: 'play',
-                time: domElements.audioPlayer.currentTime
+                time: domElements.audioPlayer.currentTime,
+                timestamp: Date.now()
             });
-            socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
         });
 
-        // Add timeupdate event for host
+        // More frequent time updates
         let lastUpdate = 0;
         domElements.audioPlayer.addEventListener('timeupdate', () => {
             const now = Date.now();
-            if (now - lastUpdate > 1000) { // Send update every second
-                socket.emit('timeUpdate', domElements.audioPlayer.currentTime);
+            if (now - lastUpdate > syncInterval) {
+                socket.emit('timeUpdate', {
+                    time: domElements.audioPlayer.currentTime,
+                    timestamp: now
+                });
                 lastUpdate = now;
             }
         });
@@ -518,29 +553,52 @@ function playSong(song) {
         domElements.audioPlayer.addEventListener('ended', () => {
             console.log('Host: Song ended naturally');
             socket.emit('hostControl', { action: 'ended' });
+            socket.emit('songEnded');
         });
 
         // Add stop button handler
         if (domElements.stopButton) {
-            domElements.stopButton.addEventListener('click', () => {
+            domElements.stopButton.classList.remove('hidden');
+            domElements.stopButton.onclick = () => {
                 console.log('Host: Stop button clicked');
                 socket.emit('hostControl', { action: 'stop' });
                 domElements.audioPlayer.pause();
                 domElements.audioPlayer.currentTime = 0;
-            });
-            domElements.stopButton.classList.remove('hidden');
+                showScreen('voting-screen');
+            };
         }
 
-        // Load and play
-        domElements.audioPlayer.load();
+        // Start playing for host
+        domElements.audioPlayer.play().catch(console.error);
     } else {
         // For non-host clients
         domElements.audioPlayer.controls = false;
-        domElements.audioPlayer.load();
         if (domElements.stopButton) {
             domElements.stopButton.classList.add('hidden');
         }
+        // Start playing for clients
+        domElements.audioPlayer.play().catch(error => {
+            console.error('Client playback failed:', error);
+            if (error.name === 'NotAllowedError') {
+                showPlayButton();
+            }
+        });
     }
+
+    // Add buffering event listeners
+    domElements.audioPlayer.addEventListener('waiting', () => {
+        console.log('Audio buffering...');
+        if (isHost) {
+            socket.emit('hostControl', { action: 'buffer' });
+        }
+    });
+
+    domElements.audioPlayer.addEventListener('canplay', () => {
+        console.log('Audio ready to play');
+        if (isHost) {
+            socket.emit('hostControl', { action: 'ready' });
+        }
+    });
 }
 
 // Function to show a play button when needed
