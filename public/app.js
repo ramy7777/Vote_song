@@ -36,25 +36,7 @@ setInterval(updateNetworkLatency, 2000);
 function initAudioContext() {
     if (!window.audioContext) {
         window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    
-    if (!audioContextInitialized && window.audioContext) {
-        window.audioContext.resume().then(() => {
-            console.log('AudioContext initialized');
-            audioContextInitialized = true;
-            if (pendingPlay && domElements.audioPlayer) {
-                domElements.audioPlayer.play().catch(error => {
-                    console.error('Playback failed after init:', error);
-                    if (error.name === 'NotAllowedError') {
-                        showPlayButton();
-                    }
-                });
-                pendingPlay = false;
-            }
-        }).catch(error => {
-            console.error('Failed to initialize AudioContext:', error);
-            showPlayButton();
-        });
+        window.audioContext.resume();
     }
 }
 
@@ -94,6 +76,40 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
+// Function to show a play button when needed
+function showPlayButton() {
+    // Only show play button for first play
+    if (!firstPlay) return;
+
+    // Remove any existing play buttons
+    const existingButton = document.querySelector('.play-interaction-button');
+    if (existingButton) {
+        existingButton.remove();
+    }
+
+    const button = document.createElement('button');
+    button.className = 'play-interaction-button';
+    button.textContent = 'Tap to Start Audio';
+    button.addEventListener('click', () => {
+        if (!window.audioContext) {
+            window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        window.audioContext.resume().then(() => {
+            console.log('AudioContext initialized');
+            audioContextInitialized = true;
+            firstPlay = false;  // Mark first play as done
+            button.remove();
+            
+            if (domElements.audioPlayer && pendingPlay) {
+                domElements.audioPlayer.play();
+                pendingPlay = false;
+            }
+        });
+    });
+
+    document.body.appendChild(button);
+}
+
 // Initialize DOM Elements
 function initializeDOMElements() {
     domElements = {
@@ -120,9 +136,8 @@ function initializeDOMElements() {
         quickJoinBtn: document.getElementById('quick-join-btn'),
     };
 
-    // Add audio context initialization on user interaction
-    document.body.addEventListener('touchstart', initAudioContext, { once: true });
-    document.body.addEventListener('click', initAudioContext, { once: true });
+    // Initialize audio context immediately
+    initAudioContext();
 
     // Quick Join Button
     domElements.quickJoinBtn.addEventListener('click', () => {
@@ -227,6 +242,16 @@ function initializeDOMElements() {
                 showScreen('voting-screen');
             }
         });
+    }
+
+    // Add audio context initialization on first user interaction
+    if (firstPlay) {
+        document.body.addEventListener('touchstart', () => {
+            if (firstPlay) showPlayButton();
+        }, { once: true });
+        document.body.addEventListener('click', () => {
+            if (firstPlay) showPlayButton();
+        }, { once: true });
     }
 }
 
@@ -402,13 +427,6 @@ socket.on('hostControl', (data) => {
         }
         
         if (data.action === 'play') {
-            // Show play button for first play or if audio context not initialized
-            if (firstPlay || !audioContextInitialized) {
-                pendingPlay = true;
-                showPlayButton();
-                return;
-            }
-            
             // Compensate for network latency
             if (data.time) {
                 const serverTime = data.time;
@@ -416,14 +434,11 @@ socket.on('hostControl', (data) => {
                 domElements.audioPlayer.currentTime = latencyCompensatedTime;
             }
 
-            const playPromise = domElements.audioPlayer.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(error => {
-                    console.error('Playback failed:', error);
-                    if (error.name === 'NotAllowedError') {
-                        showPlayButton();
-                    }
-                });
+            if (firstPlay) {
+                pendingPlay = true;
+                showPlayButton();
+            } else {
+                domElements.audioPlayer.play();
             }
         } else if (data.action === 'pause') {
             domElements.audioPlayer.pause();
@@ -479,7 +494,12 @@ socket.on('timeUpdate', (serverTime) => {
 socket.on('songControl', (action) => {
     if (!isHost && domElements.audioPlayer) {
         if (action === 'play') {
-            domElements.audioPlayer.play();
+            if (firstPlay) {
+                pendingPlay = true;
+                showPlayButton();
+            } else {
+                domElements.audioPlayer.play();
+            }
         } else if (action === 'pause') {
             domElements.audioPlayer.pause();
         } else if (action === 'stop') {
@@ -639,53 +659,27 @@ function playSong(song) {
                 });
             });
 
-            // More frequent time updates
-            let lastUpdate = 0;
-            domElements.audioPlayer.addEventListener('timeupdate', () => {
-                const now = Date.now();
-                if (now - lastUpdate > syncInterval) {
-                    socket.emit('timeUpdate', {
-                        time: domElements.audioPlayer.currentTime,
-                        timestamp: now
-                    });
-                    lastUpdate = now;
-                }
-            });
-
-            domElements.audioPlayer.addEventListener('ended', () => {
-                console.log('Host: Song ended naturally');
-                socket.emit('hostControl', { action: 'ended' });
-                socket.emit('songEnded');
-            });
-
-            // Add stop button handler
-            if (domElements.stopButton) {
-                domElements.stopButton.classList.remove('hidden');
-                domElements.stopButton.onclick = () => {
-                    console.log('Host: Stop button clicked');
-                    socket.emit('hostControl', { action: 'stop' });
-                    domElements.audioPlayer.pause();
-                    domElements.audioPlayer.currentTime = 0;
-                    showScreen('voting-screen');
-                    releaseWakeLock();  // Release wake lock when stopping
-                };
-            }
-
             // Start playing for host
-            domElements.audioPlayer.play().catch(console.error);
+            if (firstPlay) {
+                pendingPlay = true;
+                showPlayButton();
+            } else {
+                domElements.audioPlayer.play();
+            }
         } else {
             // For non-host clients
             domElements.audioPlayer.controls = false;
             if (domElements.stopButton) {
                 domElements.stopButton.classList.add('hidden');
             }
+            
             // Start playing for clients
-            domElements.audioPlayer.play().catch(error => {
-                console.error('Client playback failed:', error);
-                if (error.name === 'NotAllowedError') {
-                    showPlayButton();
-                }
-            });
+            if (firstPlay) {
+                pendingPlay = true;
+                showPlayButton();
+            } else {
+                domElements.audioPlayer.play();
+            }
         }
 
         // Add buffering event listeners
@@ -725,36 +719,6 @@ if (domElements.stopButton) {
             showScreen('voting-screen');
         }
     });
-}
-
-// Function to show a play button when needed
-function showPlayButton() {
-    // Remove any existing play buttons
-    const existingButton = document.querySelector('.play-interaction-button');
-    if (existingButton) {
-        existingButton.remove();
-    }
-
-    const button = document.createElement('button');
-    button.className = 'play-interaction-button';
-    button.textContent = 'Tap to Play';
-    button.addEventListener('click', () => {
-        if (domElements.audioPlayer) {
-            const playPromise = domElements.audioPlayer.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    button.remove();
-                    audioContextInitialized = true;
-                    firstPlay = false;  // Mark first play as done
-                    pendingPlay = false;
-                }).catch(error => {
-                    console.error('Playback still failed:', error);
-                });
-            }
-        }
-    });
-
-    document.body.appendChild(button);
 }
 
 // Initialize when the page loads
