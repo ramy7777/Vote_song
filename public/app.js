@@ -154,44 +154,12 @@ function initializeDOMElements() {
                 return;
             }
             
-            // Get host's current time from the socket
-            if (socket && domElements.audioPlayer) {
-                socket.emit('getCurrentTime', currentSessionId, (hostTime) => {
-                    const drift = domElements.audioPlayer.currentTime - hostTime;
-                    const absDrift = Math.abs(drift);
-                    
-                    // More sensitive drift threshold (0.1 seconds instead of 0.5)
-                    if (absDrift > 0.1) {
-                        console.log(`Current drift: ${drift.toFixed(3)} seconds`);
-                        
-                        // Calculate playback rate for drift correction
-                        let newRate;
-                        if (drift > 0) {
-                            // Client is ahead, slow down playback
-                            // More aggressive rate adjustment based on drift magnitude
-                            newRate = Math.max(0.90, 1 - (absDrift * 0.1));
-                        } else {
-                            // Client is behind, speed up playback
-                            // More aggressive rate adjustment based on drift magnitude
-                            newRate = Math.min(1.10, 1 + (absDrift * 0.1));
-                        }
-                        
-                        // Apply the new playback rate
-                        domElements.audioPlayer.playbackRate = newRate;
-                        
-                        // Reset playback rate after drift is corrected
-                        // Shorter correction time for small drifts
-                        const correctionTime = Math.min(absDrift * 1000, 2000);
-                        setTimeout(() => {
-                            domElements.audioPlayer.playbackRate = 1.0;
-                            console.log('Playback rate reset to normal');
-                        }, correctionTime);
-                        
-                        console.log(`Adjusting playback rate to ${newRate.toFixed(3)}`);
-                    } else {
-                        console.log(`Minor drift of ${drift.toFixed(3)} seconds, maintaining normal playback`);
-                    }
-                });
+            // Forward playback by 50ms on every sync click
+            if (domElements.audioPlayer) {
+                const currentTime = domElements.audioPlayer.currentTime;
+                const newTime = currentTime + 0.05; // Add 50ms
+                domElements.audioPlayer.currentTime = newTime;
+                console.log(`Sync: Forwarded playback by 50ms from ${currentTime.toFixed(3)} to ${newTime.toFixed(3)}`);
             }
         });
     }
