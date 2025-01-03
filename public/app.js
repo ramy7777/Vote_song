@@ -140,7 +140,7 @@ function initializeDOMElements() {
     // Add sync button
     if (domElements.controlButtons) {
         const syncButton = document.createElement('button');
-        syncButton.textContent = '';
+        syncButton.textContent = '🔄';
         syncButton.className = 'control-btn';
         syncButton.title = 'Sync with host';
         syncButton.id = 'sync-button';
@@ -210,14 +210,15 @@ function initializeDOMElements() {
         });
     }
 
-    domElements.muteBtn.addEventListener('click', () => {
-        const isMuted = soundManager.toggleMute();
-        domElements.mutedIcon.classList.toggle('hidden', !isMuted);
-        domElements.unmutedIcon.classList.toggle('hidden', isMuted);
-        if (domElements.audioPlayer) {
-            domElements.audioPlayer.muted = isMuted;
-        }
-    });
+    // Add mute button functionality
+    if (domElements.muteBtn) {
+        domElements.muteBtn.addEventListener('click', () => {
+            if (domElements.audioPlayer) {
+                domElements.audioPlayer.muted = !domElements.audioPlayer.muted;
+                domElements.muteBtn.textContent = domElements.audioPlayer.muted ? '🔈' : '🔊';
+            }
+        });
+    }
 
     if (domElements.stopButton) {
         domElements.stopButton.addEventListener('click', () => {

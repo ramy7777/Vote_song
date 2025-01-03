@@ -241,10 +241,16 @@ audio::-webkit-media-controls-play-button {
 }
 
 audio::-webkit-media-controls-mute-button {
-    background-color: transparent !important;
-    border-radius: 50%;
-    transition: all 0.3s ease;
-    filter: invert(79%) sepia(72%) saturate(1291%) hue-rotate(359deg) brightness(105%) contrast(107%) !important;
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 8px !important;
+    cursor: pointer;
+    font-size: 24px;
+    color: white !important;
+    outline: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
 }
 
 audio::-webkit-media-controls-current-time-display,
@@ -280,31 +286,52 @@ audio::-webkit-media-controls-volume-slider::-webkit-slider-thumb {
 .control-buttons {
     display: flex;
     justify-content: center;
-    gap: 15px;
-    margin-top: 15px;
+    align-items: center;
+    margin-top: 10px;
 }
 
-/* Control buttons */
 .control-btn {
-    background: #c41e3a;
-    color: #ffd700;
-    border: none;
     padding: 8px 16px;
-    border-radius: 20px;
+    margin: 0 5px;
+    border: none;
+    border-radius: 4px;
     cursor: pointer;
-    transition: all 0.3s ease;
-    font-weight: bold;
-    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    background-color: #333;
+    color: white;
 }
 
-.control-btn:hover {
-    background: #ff0033;
-    box-shadow: 0 4px 8px rgba(220, 20, 20, 0.4);
+#mute-btn {
+    all: unset;
+    cursor: pointer;
+    font-size: 24px;
+    margin: 0 8px;
+    color: white;
 }
 
-.control-btn:active {
-    transform: translateY(1px);
+#sync-button {
+    all: unset;
+    cursor: pointer;
+    font-size: 24px;
+    margin: 0 8px;
+    color: white;
+}
+
+#stop-button {
+    margin: 10px;
+    padding: 8px 16px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#stop-button:hover {
+    background-color: #c82333;
+}
+
+#stop-button.hidden {
+    display: none;
 }
 
 /* Mobile-specific adjustments */
