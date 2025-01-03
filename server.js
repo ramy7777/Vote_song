@@ -529,6 +529,17 @@ io.on('connection', (socket) => {
             }
         }
     });
+
+    // Handle getCurrentTime request
+    socket.on('getCurrentTime', (sessionId, callback) => {
+        const session = sessions.get(sessionId);
+        if (session && session.host) {
+            // Forward the time request to the host
+            io.to(session.host).emit('getTime', (time) => {
+                callback(time);
+            });
+        }
+    });
 });
 
 // Start server

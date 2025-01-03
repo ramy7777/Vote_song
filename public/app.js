@@ -134,7 +134,67 @@ function initializeDOMElements() {
         waitingMessage: document.getElementById('waiting-message'),
         stopButton: document.getElementById('stop-button'),
         quickJoinBtn: document.getElementById('quick-join-btn'),
+        controlButtons: document.querySelector('.control-buttons')
     };
+
+    // Add sync button
+    if (domElements.controlButtons) {
+        const syncButton = document.createElement('button');
+        syncButton.textContent = '';
+        syncButton.className = 'control-btn';
+        syncButton.title = 'Sync with host';
+        syncButton.id = 'sync-button';
+        syncButton.style.backgroundColor = '#007bff';
+        domElements.controlButtons.appendChild(syncButton);
+
+        // Handle sync with host
+        syncButton.addEventListener('click', function() {
+            if (isHost) {
+                alert('You are the host!');
+                return;
+            }
+            
+            // Get host's current time from the socket
+            if (socket && domElements.audioPlayer) {
+                socket.emit('getCurrentTime', currentSessionId, (hostTime) => {
+                    const drift = domElements.audioPlayer.currentTime - hostTime;
+                    const absDrift = Math.abs(drift);
+                    
+                    // More sensitive drift threshold (0.1 seconds instead of 0.5)
+                    if (absDrift > 0.1) {
+                        console.log(`Current drift: ${drift.toFixed(3)} seconds`);
+                        
+                        // Calculate playback rate for drift correction
+                        let newRate;
+                        if (drift > 0) {
+                            // Client is ahead, slow down playback
+                            // More aggressive rate adjustment based on drift magnitude
+                            newRate = Math.max(0.90, 1 - (absDrift * 0.1));
+                        } else {
+                            // Client is behind, speed up playback
+                            // More aggressive rate adjustment based on drift magnitude
+                            newRate = Math.min(1.10, 1 + (absDrift * 0.1));
+                        }
+                        
+                        // Apply the new playback rate
+                        domElements.audioPlayer.playbackRate = newRate;
+                        
+                        // Reset playback rate after drift is corrected
+                        // Shorter correction time for small drifts
+                        const correctionTime = Math.min(absDrift * 1000, 2000);
+                        setTimeout(() => {
+                            domElements.audioPlayer.playbackRate = 1.0;
+                            console.log('Playback rate reset to normal');
+                        }, correctionTime);
+                        
+                        console.log(`Adjusting playback rate to ${newRate.toFixed(3)}`);
+                    } else {
+                        console.log(`Minor drift of ${drift.toFixed(3)} seconds, maintaining normal playback`);
+                    }
+                });
+            }
+        });
+    }
 
     // Initialize audio context immediately
     initAudioContext();
@@ -546,6 +606,18 @@ socket.on('startVoting', () => {
         domElements.currentSongDiv.classList.add('hidden');
     }
     showScreen('voting-screen');
+});
+
+socket.on('hostLeft', () => {
+    alert('Host has left the session.');
+    window.location.reload();
+});
+
+// Handle getTime request from clients
+socket.on('getTime', (callback) => {
+    if (isHost && domElements.audioPlayer) {
+        callback(domElements.audioPlayer.currentTime);
+    }
 });
 
 // Helper Functions
