@@ -129,8 +129,6 @@ function initializeDOMElements() {
         currentSongName: document.getElementById('current-song-name'),
         audioPlayer: document.getElementById('audio-player'),
         muteBtn: document.getElementById('mute-btn'),
-        mutedIcon: document.querySelector('.muted'),
-        unmutedIcon: document.querySelector('.unmuted'),
         waitingMessage: document.getElementById('waiting-message'),
         stopButton: document.getElementById('stop-button'),
         quickJoinBtn: document.getElementById('quick-join-btn'),
@@ -215,7 +213,8 @@ function initializeDOMElements() {
         domElements.muteBtn.addEventListener('click', () => {
             if (domElements.audioPlayer) {
                 domElements.audioPlayer.muted = !domElements.audioPlayer.muted;
-                domElements.muteBtn.textContent = domElements.audioPlayer.muted ? '🔈' : '🔊';
+                const icon = domElements.muteBtn.querySelector('i');
+                icon.className = domElements.audioPlayer.muted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
             }
         });
     }
