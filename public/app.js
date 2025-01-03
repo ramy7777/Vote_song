@@ -154,12 +154,12 @@ function initializeDOMElements() {
                 return;
             }
             
-            // Forward playback by 50ms on every sync click
+            // Forward playback by 300ms on every sync click
             if (domElements.audioPlayer) {
                 const currentTime = domElements.audioPlayer.currentTime;
-                const newTime = currentTime + 0.05; // Add 50ms
+                const newTime = currentTime + 0.3; // Add 300ms
                 domElements.audioPlayer.currentTime = newTime;
-                console.log(`Sync: Forwarded playback by 50ms from ${currentTime.toFixed(3)} to ${newTime.toFixed(3)}`);
+                console.log(`Sync: Forwarded playback by 300ms from ${currentTime.toFixed(3)} to ${newTime.toFixed(3)}`);
             }
         });
     }
